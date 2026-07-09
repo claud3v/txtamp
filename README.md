@@ -32,3 +32,5 @@
 - [ ] Queue management
 - [ ] Album artwork
 - [ ] Lyrics
+
+Check [[ROADMAP]] for a more detailed roadmap.

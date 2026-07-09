@@ -1,7 +1,13 @@
 package main
 
-import "fmt"
+import (
+	"log"
+
+	"txtamp/auth"
+)
 
 func main() {
-	fmt.Println("TXTAMP it really whips the textual llama's ass")
+	if err := auth.Run(); err != nil {
+		log.Fatal(err)
+	}
 }
