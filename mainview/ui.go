@@ -1,13 +1,16 @@
 package mainview
 
 import (
-	"fmt"
-	"strings"
+	"context"
+	"time"
+	"txtamp/navidrome"
 	"txtamp/ui"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/lipgloss"
 )
+
+const loadTimeout = 10 * time.Second
 
 type focusPane int
 
@@ -16,41 +19,45 @@ const (
 	songsPane
 )
 
-type playlist struct {
-	name  string
-	songs []song
-}
-
-type song struct {
-	title    string
-	artist   string
-	duration string
-}
-
 type Model struct {
 	width       int
 	height      int
 	connectedTo string
+	client      navidrome.Client
 
 	focused          focusPane
 	selectedPlaylist int
 	selectedSong     int
-	currentSong      *song
+	currentSong      *navidrome.Song
 	paused           bool
+	loading          bool
+	err              error
 
-	playlists []playlist
+	playlists []navidrome.Playlist
+	songs     []navidrome.Song
 }
 
-func New(connectedTo string) Model {
+type playlistsLoadedMsg struct {
+	playlists []navidrome.Playlist
+	err       error
+}
+
+type songsLoadedMsg struct {
+	songs []navidrome.Song
+	err   error
+}
+
+func New(connectedTo string, client navidrome.Client) Model {
 	return Model{
 		connectedTo: connectedTo,
+		client:      client,
 		focused:     playlistsPane,
-		playlists:   dummyPlaylists(),
+		loading:     true,
 	}
 }
 
 func (m Model) Init() tea.Cmd {
-	return nil
+	return m.loadPlaylists()
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -58,6 +65,25 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+	case playlistsLoadedMsg:
+		m.loading = false
+		m.err = msg.err
+		m.playlists = msg.playlists
+		m.songs = nil
+		m.selectedPlaylist = 0
+		m.selectedSong = 0
+
+		if msg.err != nil || len(m.playlists) == 0 {
+			return m, nil
+		}
+
+		cmd := m.loadSelectedPlaylist()
+		return m, cmd
+	case songsLoadedMsg:
+		m.loading = false
+		m.err = msg.err
+		m.songs = msg.songs
+		m.selectedSong = 0
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c":
@@ -67,11 +93,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "right":
 			m.focused = songsPane
 		case "up":
-			m.moveSelection(-1)
+			cmd := m.moveSelection(-1)
+			return m, cmd
 		case "down":
-			m.moveSelection(1)
+			cmd := m.moveSelection(1)
+			return m, cmd
 		case "enter":
-			m.activateSelection()
+			cmd := m.activateSelection()
+			return m, cmd
 		case " ", "space":
 			m.togglePlayPause()
 		}
@@ -96,98 +125,46 @@ func (m Model) View() tea.View {
 	return view
 }
 
-func (m Model) renderPlaylists(width, height int) string {
-	lines := []string{
-		ui.Title.Render("TxtAmp"),
-		ui.Subtitle.Render("Connected: " + m.connectedTo),
-		"",
-		paneTitle("Playlists", m.focused == playlistsPane),
-	}
-
-	for i, playlist := range m.playlists {
-		line := selectableLine(playlist.name, i == m.selectedPlaylist, m.focused == playlistsPane, width-4)
-		lines = append(lines, line)
-	}
-
-	return ui.Sidebar.
-		Width(width).
-		Height(height).
-		Render(strings.Join(lines, "\n"))
-}
-
-func (m Model) renderSongs(width, height int) string {
-	currentPlaylist := m.playlists[m.selectedPlaylist]
-
-	lines := []string{
-		paneTitle(currentPlaylist.name, m.focused == songsPane),
-		ui.Subtitle.Render(fmt.Sprintf("%d songs", len(currentPlaylist.songs))),
-		"",
-	}
-
-	for i, song := range currentPlaylist.songs {
-		titleWidth := max(width-18, 10)
-		title := ui.Truncate(song.title, titleWidth)
-		line := fmt.Sprintf("%-*"+"s %5s", titleWidth, title, song.duration)
-		line = selectableLine(line, i == m.selectedSong, m.focused == songsPane, width-4)
-		lines = append(lines, line)
-	}
-
-	return ui.MainPane.
-		Width(width).
-		Height(height).
-		Render(strings.Join(lines, "\n"))
-}
-
-func (m Model) renderPlayer(width int) string {
-	status := "Stopped"
-	nowPlaying := "No song selected"
-	progress := "00:00 / 00:00"
-	bars := "[      ]"
-
-	if m.currentSong != nil {
-		if m.paused {
-			status = "Paused"
-			bars = "[||    ]"
-		} else {
-			status = "Playing"
-			bars = "[||||  ]"
-		}
-
-		nowPlaying = fmt.Sprintf("%s - %s", m.currentSong.artist, m.currentSong.title)
-		progress = "00:00 / " + m.currentSong.duration
-	}
-
-	line := fmt.Sprintf("%s  %s  %s", status, bars, ui.Truncate(nowPlaying, max(width-34, 10)))
-	if width > 30 {
-		line = fmt.Sprintf("%-*s %s", max(width-14, 10), line, progress)
-	}
-
-	return ui.PlayerBar.
-		Width(width - 2).
-		Render(line)
-}
-
-func (m *Model) moveSelection(delta int) {
+func (m *Model) moveSelection(delta int) tea.Cmd {
 	switch m.focused {
 	case playlistsPane:
+		if len(m.playlists) == 0 {
+			return nil
+		}
+
+		previous := m.selectedPlaylist
 		m.selectedPlaylist = clamp(m.selectedPlaylist+delta, 0, len(m.playlists)-1)
 		m.selectedSong = 0
+		if m.selectedPlaylist != previous {
+			return m.loadSelectedPlaylist()
+		}
 	case songsPane:
-		songs := m.playlists[m.selectedPlaylist].songs
-		m.selectedSong = clamp(m.selectedSong+delta, 0, len(songs)-1)
+		if len(m.songs) == 0 {
+			return nil
+		}
+
+		m.selectedSong = clamp(m.selectedSong+delta, 0, len(m.songs)-1)
 	}
+
+	return nil
 }
 
-func (m *Model) activateSelection() {
+func (m *Model) activateSelection() tea.Cmd {
 	if m.focused == playlistsPane {
 		m.focused = songsPane
 		m.selectedSong = 0
-		return
+		return m.loadSelectedPlaylist()
 	}
 
-	song := m.playlists[m.selectedPlaylist].songs[m.selectedSong]
+	if len(m.songs) == 0 {
+		return nil
+	}
+
+	song := m.songs[m.selectedSong]
 	m.currentSong = &song
 	m.paused = false
+
+	return nil
 }
 
 func (m *Model) togglePlayPause() {
@@ -199,70 +176,33 @@ func (m *Model) togglePlayPause() {
 	m.paused = !m.paused
 }
 
-func paneTitle(title string, focused bool) string {
-	if focused {
-		return ui.PaneTitleFocused.Render(title)
-	}
+func (m *Model) loadPlaylists() tea.Cmd {
+	m.loading = true
 
-	return ui.PaneTitle.Render(title)
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), loadTimeout)
+		defer cancel()
+
+		playlists, err := m.client.ListPlaylists(ctx)
+		return playlistsLoadedMsg{playlists: playlists, err: err}
+	}
 }
 
-func selectableLine(text string, selected, focused bool, width int) string {
-	prefix := "  "
-	if selected {
-		prefix = "> "
+func (m *Model) loadSelectedPlaylist() tea.Cmd {
+	if len(m.playlists) == 0 {
+		return nil
 	}
 
-	line := prefix + ui.Truncate(text, max(width-2, 1))
-	if selected && focused {
-		return ui.SelectedRowFocused.Width(width).Render(line)
-	}
-	if selected {
-		return ui.SelectedRow.Width(width).Render(line)
-	}
+	playlistID := m.playlists[m.selectedPlaylist].ID
+	m.loading = true
+	m.songs = nil
 
-	return lipgloss.NewStyle().Width(width).Render(line)
-}
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), loadTimeout)
+		defer cancel()
 
-func dummyPlaylists() []playlist {
-	return []playlist{
-		{
-			name: "Aerosmith Top Songs",
-			songs: []song{
-				{title: "Dream On", artist: "Aerosmith", duration: "4:28"},
-				{title: "Sweet Emotion", artist: "Aerosmith", duration: "4:34"},
-				{title: "Walk This Way", artist: "Aerosmith", duration: "3:40"},
-				{title: "Crazy", artist: "Aerosmith", duration: "5:17"},
-				{title: "Janie's Got a Gun", artist: "Aerosmith", duration: "5:30"},
-			},
-		},
-		{
-			name: "Late Night Drive",
-			songs: []song{
-				{title: "Midnight City", artist: "M83", duration: "4:04"},
-				{title: "Nightcall", artist: "Kavinsky", duration: "4:18"},
-				{title: "A Real Hero", artist: "College", duration: "4:27"},
-				{title: "Under Your Spell", artist: "Desire", duration: "3:52"},
-			},
-		},
-		{
-			name: "Sunday Reset",
-			songs: []song{
-				{title: "Harvest Moon", artist: "Neil Young", duration: "5:03"},
-				{title: "Pink Moon", artist: "Nick Drake", duration: "2:06"},
-				{title: "Landslide", artist: "Fleetwood Mac", duration: "3:19"},
-				{title: "Into the Mystic", artist: "Van Morrison", duration: "3:25"},
-			},
-		},
-		{
-			name: "Tiny Desk Energy",
-			songs: []song{
-				{title: "Them Changes", artist: "Thundercat", duration: "3:08"},
-				{title: "Come Down", artist: "Anderson .Paak", duration: "2:56"},
-				{title: "Dang!", artist: "Mac Miller", duration: "5:05"},
-				{title: "Am I Wrong", artist: "Anderson .Paak", duration: "4:13"},
-			},
-		},
+		songs, err := m.client.GetPlaylist(ctx, playlistID)
+		return songsLoadedMsg{songs: songs, err: err}
 	}
 }
 

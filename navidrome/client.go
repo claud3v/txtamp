@@ -25,6 +25,20 @@ type Client struct {
 	HTTPClient *http.Client
 }
 
+type Playlist struct {
+	ID        string
+	Name      string
+	SongCount int
+	Duration  int
+}
+
+type Song struct {
+	ID       string
+	Title    string
+	Artist   string
+	Duration int
+}
+
 func (c Client) Ping(ctx context.Context) error {
 	var response subsonicResponse
 	if err := c.get(ctx, "ping.view", nil, &response); err != nil {
@@ -40,6 +54,35 @@ func (c Client) Ping(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func (c Client) ListPlaylists(ctx context.Context) ([]Playlist, error) {
+	var response playlistsResponse
+	if err := c.get(ctx, "getPlaylists.view", nil, &response); err != nil {
+		return nil, err
+	}
+
+	if err := checkStatus(response.Response.Status, response.Response.Error, "list playlists"); err != nil {
+		return nil, err
+	}
+
+	return response.Response.Playlists.Playlist, nil
+}
+
+func (c Client) GetPlaylist(ctx context.Context, id string) ([]Song, error) {
+	params := url.Values{}
+	params.Set("id", id)
+
+	var response playlistResponse
+	if err := c.get(ctx, "getPlaylist.view", params, &response); err != nil {
+		return nil, err
+	}
+
+	if err := checkStatus(response.Response.Status, response.Response.Error, "get playlist"); err != nil {
+		return nil, err
+	}
+
+	return response.Response.Playlist.Entry, nil
 }
 
 func (c Client) get(ctx context.Context, endpoint string, params url.Values, out any) error {
@@ -130,10 +173,44 @@ func authToken(password, salt string) string {
 
 type subsonicResponse struct {
 	Response struct {
-		Status string `json:"status"`
-		Error  struct {
-			Code    int    `json:"code"`
-			Message string `json:"message"`
-		} `json:"error"`
+		Status string        `json:"status"`
+		Error  subsonicError `json:"error"`
 	} `json:"subsonic-response"`
+}
+
+type playlistsResponse struct {
+	Response struct {
+		Status    string        `json:"status"`
+		Error     subsonicError `json:"error"`
+		Playlists struct {
+			Playlist []Playlist `json:"playlist"`
+		} `json:"playlists"`
+	} `json:"subsonic-response"`
+}
+
+type playlistResponse struct {
+	Response struct {
+		Status   string        `json:"status"`
+		Error    subsonicError `json:"error"`
+		Playlist struct {
+			Entry []Song `json:"entry"`
+		} `json:"playlist"`
+	} `json:"subsonic-response"`
+}
+
+type subsonicError struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+}
+
+func checkStatus(status string, responseError subsonicError, action string) error {
+	if status == "ok" {
+		return nil
+	}
+
+	if responseError.Message != "" {
+		return fmt.Errorf("navidrome %s failed: %s", action, responseError.Message)
+	}
+
+	return fmt.Errorf("navidrome %s failed: status %q", action, status)
 }

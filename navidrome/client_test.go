@@ -71,3 +71,84 @@ func TestPingReturnsSubsonicError(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
+
+func TestListPlaylists(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/rest/getPlaylists.view" {
+			t.Fatalf("expected /rest/getPlaylists.view, got %q", r.URL.Path)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{
+			"subsonic-response": {
+				"status": "ok",
+				"playlists": {
+					"playlist": [
+						{"id": "playlist-1", "name": "Favorites", "songCount": 2, "duration": 360}
+					]
+				}
+			}
+		}`))
+	}))
+	defer server.Close()
+
+	client := Client{
+		BaseURL:  server.URL,
+		Username: "john",
+		Password: "secret",
+	}
+
+	playlists, err := client.ListPlaylists(context.Background())
+	if err != nil {
+		t.Fatalf("expected playlists to load, got %v", err)
+	}
+	if len(playlists) != 1 {
+		t.Fatalf("expected 1 playlist, got %d", len(playlists))
+	}
+	if playlists[0].ID != "playlist-1" || playlists[0].Name != "Favorites" {
+		t.Fatalf("unexpected playlist: %+v", playlists[0])
+	}
+}
+
+func TestGetPlaylist(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/rest/getPlaylist.view" {
+			t.Fatalf("expected /rest/getPlaylist.view, got %q", r.URL.Path)
+		}
+		if r.URL.Query().Get("id") != "playlist-1" {
+			t.Fatalf("expected playlist id, got %q", r.URL.Query().Get("id"))
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{
+			"subsonic-response": {
+				"status": "ok",
+				"playlist": {
+					"id": "playlist-1",
+					"name": "Favorites",
+					"entry": [
+						{"id": "song-1", "title": "Dream On", "artist": "Aerosmith", "duration": 268}
+					]
+				}
+			}
+		}`))
+	}))
+	defer server.Close()
+
+	client := Client{
+		BaseURL:  server.URL,
+		Username: "john",
+		Password: "secret",
+	}
+
+	songs, err := client.GetPlaylist(context.Background(), "playlist-1")
+	if err != nil {
+		t.Fatalf("expected songs to load, got %v", err)
+	}
+	if len(songs) != 1 {
+		t.Fatalf("expected 1 song, got %d", len(songs))
+	}
+	if songs[0].ID != "song-1" || songs[0].Title != "Dream On" {
+		t.Fatalf("unexpected song: %+v", songs[0])
+	}
+}

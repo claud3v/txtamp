@@ -46,7 +46,7 @@ func New() Model {
 	if found {
 		return Model{
 			screen: mainScreen,
-			main:   mainview.New(connection.ConnectedTo),
+			main:   mainview.New(connection.ConnectedTo, connection.Client()),
 		}
 	}
 
@@ -57,14 +57,21 @@ func New() Model {
 }
 
 func (m Model) Init() tea.Cmd {
-	return nil
+	switch m.screen {
+	case authScreen:
+		return m.auth.Init()
+	case mainScreen:
+		return m.main.Init()
+	default:
+		return nil
+	}
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if msg, ok := msg.(auth.ConnectResultMsg); ok && msg.Err == nil {
 		m.screen = mainScreen
-		m.main = mainview.New(msg.ConnectedTo)
-		return m, nil
+		m.main = mainview.New(msg.ConnectedTo, msg.Client)
+		return m, m.main.Init()
 	}
 
 	switch m.screen {

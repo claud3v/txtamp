@@ -15,6 +15,7 @@ const connectTimeout = 10 * time.Second
 
 type ConnectResultMsg struct {
 	ConnectedTo string
+	Client      navidrome.Client
 	Err         error
 }
 
@@ -26,33 +27,41 @@ type Connection struct {
 	ConnectedTo string
 }
 
+func (c Connection) Client() navidrome.Client {
+	return navidrome.Client{
+		BaseURL:  c.Host,
+		Username: c.Username,
+		Password: c.Password,
+	}
+}
+
 func connectServer(alias, baseURL, username, password string) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), connectTimeout)
 		defer cancel()
 
-		client := navidrome.Client{
-			BaseURL:  baseURL,
-			Username: username,
-			Password: password,
-		}
-
-		if err := client.Ping(ctx); err != nil {
-			return ConnectResultMsg{Err: err}
-		}
-
-		credentials := config.Credentials{
+		connection := Connection{
 			Alias:    alias,
 			Host:     baseURL,
 			Username: username,
 			Password: password,
 		}
+		client := connection.Client()
+
+		if err := client.Ping(ctx); err != nil {
+			return ConnectResultMsg{Err: err}
+		}
+
+		credentials := credentialsFromConnection(connection)
 
 		if err := config.SaveCredentials(credentials); err != nil {
 			return ConnectResultMsg{Err: err}
 		}
 
-		return ConnectResultMsg{ConnectedTo: connectedName(credentials)}
+		return ConnectResultMsg{
+			ConnectedTo: connectedName(credentials),
+			Client:      client,
+		}
 	}
 }
 
@@ -65,20 +74,23 @@ func LoadSavedConnection() (Connection, bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), connectTimeout)
 	defer cancel()
 
-	client := navidrome.Client{
-		BaseURL:  credentials.Host,
-		Username: credentials.Username,
-		Password: credentials.Password,
-	}
-
 	connection := connectionFromCredentials(credentials)
-	if err := client.Ping(ctx); err != nil {
+	if err := connection.Client().Ping(ctx); err != nil {
 		return connection, true, fmt.Errorf("saved connection failed: %w", err)
 	}
 
 	connection.ConnectedTo = connectedName(credentials)
 
 	return connection, true, nil
+}
+
+func credentialsFromConnection(connection Connection) config.Credentials {
+	return config.Credentials{
+		Alias:    connection.Alias,
+		Host:     connection.Host,
+		Username: connection.Username,
+		Password: connection.Password,
+	}
 }
 
 func connectionFromCredentials(credentials config.Credentials) Connection {
