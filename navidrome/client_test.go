@@ -127,7 +127,7 @@ func TestGetPlaylist(t *testing.T) {
 					"id": "playlist-1",
 					"name": "Favorites",
 					"entry": [
-						{"id": "song-1", "title": "Dream On", "artist": "Aerosmith", "duration": 268}
+						{"id": "song-1", "title": "Dream On", "artist": "Aerosmith", "album": "Aerosmith", "track": 3, "duration": 268}
 					]
 				}
 			}
@@ -150,6 +150,9 @@ func TestGetPlaylist(t *testing.T) {
 	}
 	if songs[0].ID != "song-1" || songs[0].Title != "Dream On" {
 		t.Fatalf("unexpected song: %+v", songs[0])
+	}
+	if songs[0].Album != "Aerosmith" || songs[0].Track != 3 {
+		t.Fatalf("expected album and track metadata, got %+v", songs[0])
 	}
 }
 

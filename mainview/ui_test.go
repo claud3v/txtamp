@@ -118,9 +118,9 @@ func loadedModel() Model {
 		{ID: "playlist-2", Name: "Road Trip"},
 	}
 	m.songs = []navidrome.Song{
-		{ID: "song-1", Title: "Dream On", Artist: "Aerosmith", Duration: 268},
-		{ID: "song-2", Title: "Sweet Emotion", Artist: "Aerosmith", Duration: 274},
-		{ID: "song-3", Title: "Walk This Way", Artist: "Aerosmith", Duration: 220},
+		{ID: "song-1", Title: "Dream On", Artist: "Aerosmith", Album: "Aerosmith", Track: 3, Duration: 268},
+		{ID: "song-2", Title: "Sweet Emotion", Artist: "Aerosmith", Album: "Toys in the Attic", Track: 1, Duration: 274},
+		{ID: "song-3", Title: "Walk This Way", Artist: "Aerosmith", Album: "Toys in the Attic", Track: 4, Duration: 220},
 	}
 	m.loading = false
 

@@ -36,6 +36,8 @@ type Song struct {
 	ID       string
 	Title    string
 	Artist   string
+	Album    string
+	Track    int
 	Duration int
 }
 
