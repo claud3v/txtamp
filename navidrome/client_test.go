@@ -152,3 +152,34 @@ func TestGetPlaylist(t *testing.T) {
 		t.Fatalf("unexpected song: %+v", songs[0])
 	}
 }
+
+func TestStreamURL(t *testing.T) {
+	client := Client{
+		BaseURL:  "https://music.example.com",
+		Username: "john",
+		Password: "secret",
+	}
+
+	streamURL, err := client.StreamURL("song-1")
+	if err != nil {
+		t.Fatalf("expected stream URL, got %v", err)
+	}
+
+	req, err := http.NewRequest(http.MethodGet, streamURL, nil)
+	if err != nil {
+		t.Fatalf("expected valid URL, got %v", err)
+	}
+
+	if req.URL.Path != "/rest/stream.view" {
+		t.Fatalf("expected stream endpoint, got %q", req.URL.Path)
+	}
+	if req.URL.Query().Get("id") != "song-1" {
+		t.Fatalf("expected song id, got %q", req.URL.Query().Get("id"))
+	}
+	if req.URL.Query().Get("u") != "john" {
+		t.Fatalf("expected username, got %q", req.URL.Query().Get("u"))
+	}
+	if req.URL.Query().Get("t") == "" {
+		t.Fatal("expected auth token")
+	}
+}

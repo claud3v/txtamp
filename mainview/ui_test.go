@@ -41,25 +41,52 @@ func TestSongNavigation(t *testing.T) {
 	}
 }
 
-func TestSpaceStartsAndTogglesPlayback(t *testing.T) {
+func TestSpaceReturnsPlayCommand(t *testing.T) {
 	m := loadedModel()
 	m.focused = songsPane
 
-	updated, _ := m.Update(tea.KeyPressMsg{Code: tea.KeySpace})
+	updated, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeySpace})
+	m = updated.(Model)
+
+	if cmd == nil {
+		t.Fatal("expected play command")
+	}
+	if m.currentSong != nil {
+		t.Fatal("expected playback state to wait for command result")
+	}
+}
+
+func TestPlaybackMessageUpdatesCurrentSong(t *testing.T) {
+	m := loadedModel()
+	song := m.songs[0]
+
+	updated, _ := m.Update(playbackMsg{song: &song})
 	m = updated.(Model)
 
 	if m.currentSong == nil {
-		t.Fatal("expected selected song to start playing")
+		t.Fatal("expected current song")
+	}
+	if m.currentSong.ID != "song-1" {
+		t.Fatalf("expected song-1, got %q", m.currentSong.ID)
 	}
 	if m.paused {
-		t.Fatal("expected playback to start unpaused")
+		t.Fatal("expected playback to be unpaused")
 	}
+}
 
-	updated, _ = m.Update(tea.KeyPressMsg{Code: tea.KeySpace})
+func TestSpaceReturnsPauseCommand(t *testing.T) {
+	m := loadedModel()
+	m.focused = songsPane
+	m.currentSong = &m.songs[0]
+
+	updated, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeySpace})
 	m = updated.(Model)
 
-	if !m.paused {
-		t.Fatal("expected playback to pause")
+	if cmd == nil {
+		t.Fatal("expected pause command")
+	}
+	if m.paused {
+		t.Fatal("expected pause state to wait for command result")
 	}
 }
 

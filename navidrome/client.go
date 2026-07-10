@@ -85,6 +85,13 @@ func (c Client) GetPlaylist(ctx context.Context, id string) ([]Song, error) {
 	return response.Response.Playlist.Entry, nil
 }
 
+func (c Client) StreamURL(id string) (string, error) {
+	params := url.Values{}
+	params.Set("id", id)
+
+	return c.requestURL("stream.view", params)
+}
+
 func (c Client) get(ctx context.Context, endpoint string, params url.Values, out any) error {
 	requestURL, err := c.requestURL(endpoint, params)
 	if err != nil {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 	"txtamp/navidrome"
+	"txtamp/player"
 	"txtamp/ui"
 
 	tea "charm.land/bubbletea/v2"
@@ -24,6 +25,7 @@ type Model struct {
 	height      int
 	connectedTo string
 	client      navidrome.Client
+	player      *player.Player
 
 	focused          focusPane
 	selectedPlaylist int
@@ -47,10 +49,17 @@ type songsLoadedMsg struct {
 	err   error
 }
 
+type playbackMsg struct {
+	song   *navidrome.Song
+	paused bool
+	err    error
+}
+
 func New(connectedTo string, client navidrome.Client) Model {
 	return Model{
 		connectedTo: connectedTo,
 		client:      client,
+		player:      player.New(),
 		focused:     playlistsPane,
 		loading:     true,
 	}
@@ -84,9 +93,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.err = msg.err
 		m.songs = msg.songs
 		m.selectedSong = 0
+	case playbackMsg:
+		m.err = msg.err
+		if msg.err != nil {
+			return m, nil
+		}
+		if msg.song != nil {
+			m.currentSong = msg.song
+		}
+		m.paused = msg.paused
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c":
+			m.player.Stop()
 			return m, tea.Quit
 		case "left":
 			m.focused = playlistsPane
@@ -102,7 +121,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmd := m.activateSelection()
 			return m, cmd
 		case " ", "space":
-			m.togglePlayPause()
+			cmd := m.togglePlayPause()
+			return m, cmd
 		}
 	}
 
@@ -161,19 +181,23 @@ func (m *Model) activateSelection() tea.Cmd {
 	}
 
 	song := m.songs[m.selectedSong]
-	m.currentSong = &song
-	m.paused = false
-
-	return nil
+	return m.playSong(song)
 }
 
-func (m *Model) togglePlayPause() {
+func (m *Model) togglePlayPause() tea.Cmd {
 	if m.currentSong == nil {
-		m.activateSelection()
-		return
+		return m.activateSelection()
 	}
 
-	m.paused = !m.paused
+	paused := !m.paused
+	player := m.player
+
+	return func() tea.Msg {
+		return playbackMsg{
+			paused: paused,
+			err:    player.TogglePause(),
+		}
+	}
 }
 
 func (m *Model) loadPlaylists() tea.Cmd {
@@ -203,6 +227,27 @@ func (m *Model) loadSelectedPlaylist() tea.Cmd {
 
 		songs, err := m.client.GetPlaylist(ctx, playlistID)
 		return songsLoadedMsg{songs: songs, err: err}
+	}
+}
+
+func (m *Model) playSong(song navidrome.Song) tea.Cmd {
+	client := m.client
+	player := m.player
+
+	return func() tea.Msg {
+		streamURL, err := client.StreamURL(song.ID)
+		if err != nil {
+			return playbackMsg{err: err}
+		}
+
+		if err := player.Play(streamURL); err != nil {
+			return playbackMsg{err: err}
+		}
+
+		return playbackMsg{
+			song:   &song,
+			paused: false,
+		}
 	}
 }
 
