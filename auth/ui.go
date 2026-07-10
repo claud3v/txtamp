@@ -19,7 +19,7 @@ const (
 	focusTargetCount
 )
 
-type model struct {
+type Model struct {
 	width  int
 	height int
 
@@ -30,11 +30,9 @@ type model struct {
 
 	focused focusedTarget
 	err     error
-
-	connectedTo string
 }
 
-func emptyView() model {
+func New() Model {
 	alias := textinput.New()
 	alias.Placeholder = "My Music Server"
 
@@ -48,7 +46,7 @@ func emptyView() model {
 	password.Placeholder = "password"
 	password.EchoMode = textinput.EchoPassword
 
-	m := model{
+	m := Model{
 		alias:    alias,
 		url:      url,
 		username: username,
@@ -61,54 +59,33 @@ func emptyView() model {
 	return m
 }
 
-func initialView() model {
-	m := emptyView()
-
-	credentials, connectedTo, found, err := loadSavedConnection()
-	if err != nil {
-		m.err = err
-
-		if found {
-			m.alias.SetValue(credentials.Alias)
-			m.url.SetValue(credentials.Host)
-			m.username.SetValue(credentials.Username)
-			m.password.SetValue(credentials.Password)
-		}
-
-		return m
-	}
-
-	if connectedTo != "" {
-		m.connectedTo = connectedTo
-	}
-
+func NewWithValues(alias, host, username, password string, err error) Model {
+	m := New()
+	m.alias.SetValue(alias)
+	m.url.SetValue(host)
+	m.username.SetValue(username)
+	m.password.SetValue(password)
+	m.err = err
 	return m
 }
 
-func (m model) Init() tea.Cmd {
+func (m Model) Init() tea.Cmd {
 	return nil
 }
 
-func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
 
-	case connectResultMsg:
-		m.err = msg.err
-		if msg.err == nil {
-			m.connectedTo = msg.connectedTo
-		}
+	case ConnectResultMsg:
+		m.err = msg.Err
 
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c":
 			return m, tea.Quit
-		}
-
-		if m.connectedTo != "" {
-			return m, nil
 		}
 
 		switch msg.String() {
@@ -145,11 +122,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func (m model) View() tea.View {
-	if m.connectedTo != "" {
-		return m.connectedView()
-	}
-
+func (m Model) View() tea.View {
 	title := ui.Title.Render("TxtAmp")
 	subtitle := ui.Subtitle.Render("It really whips the text llama's ass.")
 
@@ -206,28 +179,7 @@ Press ctrl+c to quit.`,
 	return view
 }
 
-func (m model) connectedView() tea.View {
-	content := fmt.Sprintf(
-		`%s
-
-You are connected to: %s
-
-Press ctrl+c to quit.`,
-		ui.Title.Render("TxtAmp"),
-		ui.Success.Render(m.connectedTo),
-	)
-
-	if m.width > 0 && m.height > 0 {
-		content = ui.Center(m.width, m.height, content)
-	}
-
-	view := tea.NewView(content)
-	view.AltScreen = true
-
-	return view
-}
-
-func (m *model) setFocus() {
+func (m *Model) setFocus() {
 	m.alias.Blur()
 	m.url.Blur()
 	m.username.Blur()
@@ -245,7 +197,7 @@ func (m *model) setFocus() {
 	}
 }
 
-func (m *model) handleConnectPress() tea.Cmd {
+func (m *Model) handleConnectPress() tea.Cmd {
 	m.err = nil
 
 	if !IsServerUrlValid(m.url.Value()) {
@@ -270,14 +222,4 @@ func (m *model) handleConnectPress() tea.Cmd {
 	}
 
 	return connectServer(m.alias.Value(), m.url.Value(), m.username.Value(), m.password.Value())
-}
-
-func Run() error {
-	p := tea.NewProgram(initialView())
-
-	if _, err := p.Run(); err != nil {
-		return fmt.Errorf("running UI: %w", err)
-	}
-
-	return nil
 }

@@ -20,17 +20,17 @@ func TestConnectServer(t *testing.T) {
 	defer server.Close()
 
 	msg := connectServer("home", server.URL, "john", "secret")()
-	result, ok := msg.(connectResultMsg)
+	result, ok := msg.(ConnectResultMsg)
 	if !ok {
 		t.Fatalf("expected connectResultMsg, got %T", msg)
 	}
 
-	if result.err != nil {
-		t.Fatalf("expected connect to succeed, got %v", result.err)
+	if result.Err != nil {
+		t.Fatalf("expected connect to succeed, got %v", result.Err)
 	}
 
-	if result.connectedTo != "home" {
-		t.Fatalf("expected connected name home, got %q", result.connectedTo)
+	if result.ConnectedTo != "home" {
+		t.Fatalf("expected connected name home, got %q", result.ConnectedTo)
 	}
 
 	if _, err := os.Stat(filepath.Join(home, ".txtamp", "config.env")); err != nil {
@@ -50,12 +50,12 @@ func TestConnectServerReturnsError(t *testing.T) {
 	defer server.Close()
 
 	msg := connectServer("home", server.URL, "john", "bad-password")()
-	result, ok := msg.(connectResultMsg)
+	result, ok := msg.(ConnectResultMsg)
 	if !ok {
 		t.Fatalf("expected connectResultMsg, got %T", msg)
 	}
 
-	if result.err == nil {
+	if result.Err == nil {
 		t.Fatal("expected connect to fail")
 	}
 

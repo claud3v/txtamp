@@ -13,9 +13,17 @@ import (
 
 const connectTimeout = 10 * time.Second
 
-type connectResultMsg struct {
-	connectedTo string
-	err         error
+type ConnectResultMsg struct {
+	ConnectedTo string
+	Err         error
+}
+
+type Connection struct {
+	Alias       string
+	Host        string
+	Username    string
+	Password    string
+	ConnectedTo string
 }
 
 func connectServer(alias, baseURL, username, password string) tea.Cmd {
@@ -30,7 +38,7 @@ func connectServer(alias, baseURL, username, password string) tea.Cmd {
 		}
 
 		if err := client.Ping(ctx); err != nil {
-			return connectResultMsg{err: err}
+			return ConnectResultMsg{Err: err}
 		}
 
 		credentials := config.Credentials{
@@ -41,17 +49,17 @@ func connectServer(alias, baseURL, username, password string) tea.Cmd {
 		}
 
 		if err := config.SaveCredentials(credentials); err != nil {
-			return connectResultMsg{err: err}
+			return ConnectResultMsg{Err: err}
 		}
 
-		return connectResultMsg{connectedTo: connectedName(credentials)}
+		return ConnectResultMsg{ConnectedTo: connectedName(credentials)}
 	}
 }
 
-func loadSavedConnection() (config.Credentials, string, bool, error) {
+func LoadSavedConnection() (Connection, bool, error) {
 	credentials, found, err := config.LoadCredentials()
 	if err != nil || !found {
-		return credentials, "", found, err
+		return connectionFromCredentials(credentials), found, err
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), connectTimeout)
@@ -63,11 +71,23 @@ func loadSavedConnection() (config.Credentials, string, bool, error) {
 		Password: credentials.Password,
 	}
 
+	connection := connectionFromCredentials(credentials)
 	if err := client.Ping(ctx); err != nil {
-		return credentials, "", true, fmt.Errorf("saved connection failed: %w", err)
+		return connection, true, fmt.Errorf("saved connection failed: %w", err)
 	}
 
-	return credentials, connectedName(credentials), true, nil
+	connection.ConnectedTo = connectedName(credentials)
+
+	return connection, true, nil
+}
+
+func connectionFromCredentials(credentials config.Credentials) Connection {
+	return Connection{
+		Alias:    credentials.Alias,
+		Host:     credentials.Host,
+		Username: credentials.Username,
+		Password: credentials.Password,
+	}
 }
 
 func connectedName(credentials config.Credentials) string {

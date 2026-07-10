@@ -3,11 +3,11 @@ package main
 import (
 	"log"
 
-	"txtamp/auth"
+	"txtamp/app"
 )
 
 func main() {
-	if err := auth.Run(); err != nil {
+	if err := app.Run(); err != nil {
 		log.Fatal(err)
 	}
 }
