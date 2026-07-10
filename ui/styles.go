@@ -50,4 +50,38 @@ var (
 	// Page margin.
 	Page = lipgloss.NewStyle().
 		Padding(1, 2)
+
+	// Main application sidebar.
+	Sidebar = lipgloss.NewStyle().
+		Padding(1, 2).
+		Border(lipgloss.NormalBorder(), false, true, false, false).
+		BorderForeground(lipgloss.Color("#3A3F4B"))
+
+	// Main content area.
+	MainPane = lipgloss.NewStyle().
+			Padding(1, 2)
+
+	// Bottom player status area.
+	PlayerBar = lipgloss.NewStyle().
+			Padding(1, 2).
+			Border(lipgloss.NormalBorder(), true, false, false, false).
+			BorderForeground(lipgloss.Color("#3A3F4B"))
+
+	// Pane title.
+	PaneTitle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("#8BE9FD"))
+
+	// Focused pane title.
+	PaneTitleFocused = PaneTitle.Copy().
+				Underline(true)
+
+	// Selected row.
+	SelectedRow = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#8BE9FD"))
+
+	// Selected row in the focused pane.
+	SelectedRowFocused = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#282A36")).
+				Background(lipgloss.Color("#8BE9FD"))
 )
