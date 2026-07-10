@@ -282,14 +282,14 @@ func TestPlaylistsLoadedLoadsFirstPlaylist(t *testing.T) {
 	}
 }
 
-func TestSwitchToBandsLoadsArtists(t *testing.T) {
+func TestSwitchToArtistsLoadsArtists(t *testing.T) {
 	m := loadedModel()
 
 	updated, cmd := m.Update(tea.KeyPressMsg{Code: '1', Text: "1"})
 	m = updated.(Model)
 
-	if m.mode != bandsMode {
-		t.Fatalf("expected bands mode, got %v", m.mode)
+	if m.mode != artistsMode {
+		t.Fatalf("expected artists mode, got %v", m.mode)
 	}
 	if m.focused != playlistsPane {
 		t.Fatalf("expected sidebar focus, got %v", m.focused)
@@ -326,8 +326,8 @@ func TestModeDialogAppliesSelectedMode(t *testing.T) {
 	updated, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyUp})
 	m = updated.(Model)
 
-	if m.selectedMode != bandsMode {
-		t.Fatalf("expected bands to be selected, got %v", m.selectedMode)
+	if m.selectedMode != artistsMode {
+		t.Fatalf("expected artists to be selected, got %v", m.selectedMode)
 	}
 
 	updated, cmd = m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
@@ -336,8 +336,8 @@ func TestModeDialogAppliesSelectedMode(t *testing.T) {
 	if m.modeDialogOpen {
 		t.Fatal("expected mode dialog to close")
 	}
-	if m.mode != bandsMode {
-		t.Fatalf("expected bands mode, got %v", m.mode)
+	if m.mode != artistsMode {
+		t.Fatalf("expected artists mode, got %v", m.mode)
 	}
 	if cmd == nil {
 		t.Fatal("expected artist load command")
@@ -349,10 +349,10 @@ func TestModeDialogViewShowsPicker(t *testing.T) {
 	m.width = 100
 	m.height = 30
 	m.modeDialogOpen = true
-	m.selectedMode = bandsMode
+	m.selectedMode = artistsMode
 
 	view := m.View()
-	if !strings.Contains(view.Content, "Bands") || !strings.Contains(view.Content, "Playlists") {
+	if !strings.Contains(view.Content, "Artists") || !strings.Contains(view.Content, "Playlists") {
 		t.Fatalf("expected mode picker options, got:\n%s", view.Content)
 	}
 	if !strings.Contains(view.Content, "Dream On") {
@@ -378,7 +378,7 @@ func TestUpFromFirstSidebarItemFocusesDropdown(t *testing.T) {
 
 func TestSwitchToPlaylistsLoadsSelectedPlaylist(t *testing.T) {
 	m := loadedModel()
-	m.mode = bandsMode
+	m.mode = artistsMode
 	m.artists = []navidrome.Artist{{ID: "artist-1", Name: "Aerosmith"}}
 
 	updated, cmd := m.Update(tea.KeyPressMsg{Code: '2', Text: "2"})
@@ -394,7 +394,7 @@ func TestSwitchToPlaylistsLoadsSelectedPlaylist(t *testing.T) {
 
 func TestArtistsLoadedLoadsFirstArtist(t *testing.T) {
 	m := New("home", navidrome.Client{})
-	m.mode = bandsMode
+	m.mode = artistsMode
 
 	updated, cmd := m.Update(artistsLoadedMsg{
 		artists: []navidrome.Artist{
@@ -414,9 +414,9 @@ func TestArtistsLoadedLoadsFirstArtist(t *testing.T) {
 	}
 }
 
-func TestStalePlaylistLoadDoesNotOverwriteBandsMode(t *testing.T) {
+func TestStalePlaylistLoadDoesNotOverwriteArtistsMode(t *testing.T) {
 	m := New("home", navidrome.Client{})
-	m.mode = bandsMode
+	m.mode = artistsMode
 	m.loading = true
 
 	updated, cmd := m.Update(playlistsLoadedMsg{
@@ -429,20 +429,20 @@ func TestStalePlaylistLoadDoesNotOverwriteBandsMode(t *testing.T) {
 	if cmd != nil {
 		t.Fatal("expected stale playlist load not to trigger a song load")
 	}
-	if m.mode != bandsMode {
-		t.Fatalf("expected bands mode, got %v", m.mode)
+	if m.mode != artistsMode {
+		t.Fatalf("expected artists mode, got %v", m.mode)
 	}
 	if !m.loading {
-		t.Fatal("expected current bands load state to be preserved")
+		t.Fatal("expected current artists load state to be preserved")
 	}
 	if len(m.playlists) != 1 {
 		t.Fatalf("expected playlists to be cached, got %d", len(m.playlists))
 	}
 }
 
-func TestBandMainAreaRendersAlbumGroups(t *testing.T) {
+func TestArtistMainAreaRendersAlbumGroups(t *testing.T) {
 	m := loadedModel()
-	m.mode = bandsMode
+	m.mode = artistsMode
 	m.artists = []navidrome.Artist{{ID: "artist-1", Name: "Aerosmith"}}
 	m.albums = []albumGroup{
 		{
@@ -466,7 +466,7 @@ func TestBandMainAreaRendersAlbumGroups(t *testing.T) {
 	content := m.renderMainArea(80, 12)
 	for _, expected := range []string{"> Aerosmith", "Dream On", "> Toys in the Attic", "Sweet Emotion"} {
 		if !strings.Contains(content, expected) {
-			t.Fatalf("expected %q in band view, got:\n%s", expected, content)
+			t.Fatalf("expected %q in artist view, got:\n%s", expected, content)
 		}
 	}
 }

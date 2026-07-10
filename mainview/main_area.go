@@ -7,15 +7,15 @@ import (
 	"txtamp/ui"
 )
 
-type bandRow struct {
+type artistRow struct {
 	albumTitle string
 	song       navidrome.Song
 	songIndex  int
 }
 
 func (m Model) renderMainArea(width, height int) string {
-	if m.mode == bandsMode {
-		return m.renderBands(width, height)
+	if m.mode == artistsMode {
+		return m.renderArtists(width, height)
 	}
 
 	return m.renderSongs(width, height)
@@ -58,8 +58,8 @@ func (m Model) renderSongs(width, height int) string {
 		Render(strings.Join(lines, "\n"))
 }
 
-func (m Model) renderBands(width, height int) string {
-	title := "Bands"
+func (m Model) renderArtists(width, height int) string {
+	title := "Artists"
 	if len(m.artists) > 0 {
 		title = m.artists[m.selectedArtist].Name
 	}
@@ -75,11 +75,11 @@ func (m Model) renderBands(width, height int) string {
 	} else if m.loading && len(m.songs) == 0 {
 		lines = append(lines, ui.Subtitle.Render("Loading..."))
 	} else if len(m.artists) == 0 {
-		lines = append(lines, ui.Subtitle.Render("No bands found"))
+		lines = append(lines, ui.Subtitle.Render("No artists found"))
 	}
 
-	rows := m.bandRows()
-	selectedRow := selectedBandRow(rows, m.selectedSong)
+	rows := m.artistRows()
+	selectedRow := selectedArtistRow(rows, m.selectedSong)
 	start, end := visibleRange(selectedRow, len(rows), visibleSongRows(height))
 	for i := start; i < end; i++ {
 		row := rows[i]
@@ -102,13 +102,13 @@ func (m Model) renderBands(width, height int) string {
 		Render(strings.Join(lines, "\n"))
 }
 
-func (m Model) bandRows() []bandRow {
-	rows := make([]bandRow, 0, len(m.albums)+len(m.songs))
+func (m Model) artistRows() []artistRow {
+	rows := make([]artistRow, 0, len(m.albums)+len(m.songs))
 	songIndex := 0
 	for _, group := range m.albums {
-		rows = append(rows, bandRow{albumTitle: group.album.Name, songIndex: -1})
+		rows = append(rows, artistRow{albumTitle: group.album.Name, songIndex: -1})
 		for _, song := range group.songs {
-			rows = append(rows, bandRow{song: song, songIndex: songIndex})
+			rows = append(rows, artistRow{song: song, songIndex: songIndex})
 			songIndex++
 		}
 	}
@@ -116,7 +116,7 @@ func (m Model) bandRows() []bandRow {
 	return rows
 }
 
-func selectedBandRow(rows []bandRow, selectedSong int) int {
+func selectedArtistRow(rows []artistRow, selectedSong int) int {
 	for i, row := range rows {
 		if row.songIndex == selectedSong {
 			return i

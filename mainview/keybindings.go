@@ -12,7 +12,7 @@ const (
 	actionPlayPause     action = "play_pause"
 	actionNextSong      action = "next_song"
 	actionPreviousSong  action = "previous_song"
-	actionShowBands     action = "show_bands"
+	actionShowArtists   action = "show_artists"
 	actionShowPlaylists action = "show_playlists"
 	actionCloseDialog   action = "close_dialog"
 )
@@ -28,7 +28,7 @@ var defaultKeyBindings = []keyBinding{
 	{Key: "esc", Action: actionCloseDialog, Description: "Close dialog"},
 	{Key: "left", Action: actionFocusSidebar, Description: "Focus sidebar"},
 	{Key: "right", Action: actionFocusMainArea, Description: "Focus songs"},
-	{Key: "1", Action: actionShowBands, Description: "Show bands"},
+	{Key: "1", Action: actionShowArtists, Description: "Show artists"},
 	{Key: "2", Action: actionShowPlaylists, Description: "Show playlists"},
 	{Key: "up", Action: actionMoveUp, Description: "Move up"},
 	{Key: "down", Action: actionMoveDown, Description: "Move down"},

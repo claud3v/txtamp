@@ -46,15 +46,15 @@ func (m Model) sidebarTitle() string {
 }
 
 func modeLabel(mode sidebarMode) string {
-	if mode == bandsMode {
-		return "Bands"
+	if mode == artistsMode {
+		return "Artists"
 	}
 
 	return "Playlists"
 }
 
 func (m Model) sidebarItemCount() int {
-	if m.mode == bandsMode {
+	if m.mode == artistsMode {
 		return len(m.artists)
 	}
 
@@ -63,9 +63,9 @@ func (m Model) sidebarItemCount() int {
 
 func (m Model) sidebarItems(width, height int) []string {
 	switch m.mode {
-	case bandsMode:
+	case artistsMode:
 		if len(m.artists) == 0 && !m.loading {
-			return []string{ui.Subtitle.Render("No bands found")}
+			return []string{ui.Subtitle.Render("No artists found")}
 		}
 
 		start, end := visibleRange(m.selectedArtist, len(m.artists), visibleSidebarRows(height))

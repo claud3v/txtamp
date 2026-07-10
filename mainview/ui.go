@@ -31,7 +31,7 @@ const (
 type sidebarMode int
 
 const (
-	bandsMode sidebarMode = iota
+	artistsMode sidebarMode = iota
 	playlistsMode
 )
 
@@ -162,7 +162,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.selectedSong = 0
 	case artistsLoadedMsg:
 		m.artists = msg.artists
-		if m.mode != bandsMode {
+		if m.mode != artistsMode {
 			return m, nil
 		}
 
@@ -180,7 +180,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmd := m.loadSelectedArtist()
 		return m, cmd
 	case artistLoadedMsg:
-		if m.mode != bandsMode {
+		if m.mode != artistsMode {
 			return m, nil
 		}
 
@@ -278,8 +278,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case actionPreviousSong:
 			cmd := m.playPreviousSong()
 			return m, cmd
-		case actionShowBands:
-			cmd := m.switchMode(bandsMode)
+		case actionShowArtists:
+			cmd := m.switchMode(artistsMode)
 			return m, cmd
 		case actionShowPlaylists:
 			cmd := m.switchMode(playlistsMode)
@@ -346,7 +346,7 @@ func overlayCentered(content, overlay string, width, height int) string {
 func (m Model) renderModeDialog() string {
 	width := 22
 	rows := []string{
-		modeDialogRow("Bands", "1", m.selectedMode == bandsMode, width),
+		modeDialogRow("Artists", "1", m.selectedMode == artistsMode, width),
 		modeDialogRow("Playlists", "2", m.selectedMode == playlistsMode, width),
 	}
 
@@ -411,7 +411,7 @@ func (m *Model) activateSelection() tea.Cmd {
 }
 
 func (m *Model) selectedSidebarIndex() int {
-	if m.mode == bandsMode {
+	if m.mode == artistsMode {
 		return m.selectedArtist
 	}
 
@@ -431,8 +431,8 @@ func (m *Model) handleModeDialogAction(action action) tea.Cmd {
 		m.toggleSelectedMode()
 	case actionActivate:
 		return m.applySelectedMode()
-	case actionShowBands:
-		m.selectedMode = bandsMode
+	case actionShowArtists:
+		m.selectedMode = artistsMode
 		return m.applySelectedMode()
 	case actionShowPlaylists:
 		m.selectedMode = playlistsMode
@@ -443,12 +443,12 @@ func (m *Model) handleModeDialogAction(action action) tea.Cmd {
 }
 
 func (m *Model) toggleSelectedMode() {
-	if m.selectedMode == bandsMode {
+	if m.selectedMode == artistsMode {
 		m.selectedMode = playlistsMode
 		return
 	}
 
-	m.selectedMode = bandsMode
+	m.selectedMode = artistsMode
 }
 
 func (m *Model) applySelectedMode() tea.Cmd {
@@ -470,7 +470,7 @@ func (m *Model) moveSidebarSelection(delta int) tea.Cmd {
 		if m.selectedPlaylist != previous {
 			return m.loadSelectedPlaylist()
 		}
-	case bandsMode:
+	case artistsMode:
 		if len(m.artists) == 0 {
 			return nil
 		}
@@ -504,7 +504,7 @@ func (m *Model) switchMode(mode sidebarMode) tea.Cmd {
 		}
 
 		return m.loadSelectedPlaylist()
-	case bandsMode:
+	case artistsMode:
 		if len(m.artists) == 0 {
 			return m.loadArtists()
 		}
@@ -519,7 +519,7 @@ func (m *Model) loadSelectedSidebarItem() tea.Cmd {
 	switch m.mode {
 	case playlistsMode:
 		return m.loadSelectedPlaylist()
-	case bandsMode:
+	case artistsMode:
 		return m.loadSelectedArtist()
 	default:
 		return nil
