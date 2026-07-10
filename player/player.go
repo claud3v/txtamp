@@ -1,6 +1,7 @@
 package player
 
 import (
+	"bufio"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -20,6 +21,12 @@ const (
 type Player struct {
 	cmd        *exec.Cmd
 	socketPath string
+}
+
+type Status struct {
+	Elapsed  int
+	Duration int
+	Paused   bool
 }
 
 func New() *Player {
@@ -61,7 +68,31 @@ func (p *Player) Play(url string) error {
 }
 
 func (p *Player) TogglePause() error {
-	return p.send("cycle", "pause")
+	_, err := p.send("cycle", "pause")
+	return err
+}
+
+func (p *Player) Status() (Status, error) {
+	elapsed, err := p.getNumberProperty("time-pos")
+	if err != nil {
+		return Status{}, err
+	}
+
+	duration, err := p.getNumberProperty("duration")
+	if err != nil {
+		return Status{}, err
+	}
+
+	paused, err := p.getBoolProperty("pause")
+	if err != nil {
+		return Status{}, err
+	}
+
+	return Status{
+		Elapsed:  int(elapsed),
+		Duration: int(duration),
+		Paused:   paused,
+	}, nil
 }
 
 func (p *Player) Stop() error {
@@ -78,10 +109,10 @@ func (p *Player) Stop() error {
 	return nil
 }
 
-func (p *Player) send(command ...any) error {
+func (p *Player) send(command ...any) (mpvResponse, error) {
 	conn, err := p.dial()
 	if err != nil {
-		return fmt.Errorf("connecting to mpv: %w", err)
+		return mpvResponse{}, fmt.Errorf("connecting to mpv: %w", err)
 	}
 	defer conn.Close()
 
@@ -92,10 +123,19 @@ func (p *Player) send(command ...any) error {
 	}
 
 	if err := json.NewEncoder(conn).Encode(message); err != nil {
-		return fmt.Errorf("sending mpv command: %w", err)
+		return mpvResponse{}, fmt.Errorf("sending mpv command: %w", err)
 	}
 
-	return nil
+	var response mpvResponse
+	if err := json.NewDecoder(bufio.NewReader(conn)).Decode(&response); err != nil {
+		return mpvResponse{}, fmt.Errorf("reading mpv response: %w", err)
+	}
+
+	if response.Error != "success" {
+		return mpvResponse{}, fmt.Errorf("mpv command failed: %s", response.Error)
+	}
+
+	return response, nil
 }
 
 func (p *Player) dial() (net.Conn, error) {
@@ -113,4 +153,37 @@ func (p *Player) dial() (net.Conn, error) {
 
 		time.Sleep(ipcRetryPeriod)
 	}
+}
+
+func (p *Player) getNumberProperty(name string) (float64, error) {
+	response, err := p.send("get_property", name)
+	if err != nil {
+		return 0, err
+	}
+
+	value, ok := response.Data.(float64)
+	if !ok {
+		return 0, fmt.Errorf("mpv property %s was not a number", name)
+	}
+
+	return value, nil
+}
+
+func (p *Player) getBoolProperty(name string) (bool, error) {
+	response, err := p.send("get_property", name)
+	if err != nil {
+		return false, err
+	}
+
+	value, ok := response.Data.(bool)
+	if !ok {
+		return false, fmt.Errorf("mpv property %s was not a boolean", name)
+	}
+
+	return value, nil
+}
+
+type mpvResponse struct {
+	Data  any    `json:"data"`
+	Error string `json:"error"`
 }

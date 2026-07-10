@@ -3,6 +3,7 @@ package mainview
 import (
 	"testing"
 	"txtamp/navidrome"
+	"txtamp/player"
 
 	tea "charm.land/bubbletea/v2"
 )
@@ -60,7 +61,7 @@ func TestPlaybackMessageUpdatesCurrentSong(t *testing.T) {
 	m := loadedModel()
 	song := m.songs[0]
 
-	updated, _ := m.Update(playbackMsg{song: &song})
+	updated, cmd := m.Update(playbackMsg{song: &song})
 	m = updated.(Model)
 
 	if m.currentSong == nil {
@@ -71,6 +72,12 @@ func TestPlaybackMessageUpdatesCurrentSong(t *testing.T) {
 	}
 	if m.paused {
 		t.Fatal("expected playback to be unpaused")
+	}
+	if m.duration != song.Duration {
+		t.Fatalf("expected duration %d, got %d", song.Duration, m.duration)
+	}
+	if cmd == nil {
+		t.Fatal("expected status polling command")
 	}
 }
 
@@ -87,6 +94,33 @@ func TestSpaceReturnsPauseCommand(t *testing.T) {
 	}
 	if m.paused {
 		t.Fatal("expected pause state to wait for command result")
+	}
+}
+
+func TestPlayerStatusMessageUpdatesProgress(t *testing.T) {
+	m := loadedModel()
+	m.currentSong = &m.songs[0]
+
+	updated, cmd := m.Update(playerStatusMsg{
+		status: player.Status{
+			Elapsed:  42,
+			Duration: 268,
+			Paused:   true,
+		},
+	})
+	m = updated.(Model)
+
+	if m.elapsed != 42 {
+		t.Fatalf("expected elapsed 42, got %d", m.elapsed)
+	}
+	if m.duration != 268 {
+		t.Fatalf("expected duration 268, got %d", m.duration)
+	}
+	if !m.paused {
+		t.Fatal("expected paused")
+	}
+	if cmd == nil {
+		t.Fatal("expected next status tick")
 	}
 }
 

@@ -11,7 +11,10 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-const loadTimeout = 10 * time.Second
+const (
+	loadTimeout  = 10 * time.Second
+	statusPeriod = 1 * time.Second
+)
 
 type focusPane int
 
@@ -32,6 +35,8 @@ type Model struct {
 	selectedSong     int
 	currentSong      *navidrome.Song
 	paused           bool
+	elapsed          int
+	duration         int
 	loading          bool
 	err              error
 
@@ -54,6 +59,13 @@ type playbackMsg struct {
 	paused bool
 	err    error
 }
+
+type playerStatusMsg struct {
+	status player.Status
+	err    error
+}
+
+type playerTickMsg time.Time
 
 func New(connectedTo string, client navidrome.Client) Model {
 	return Model{
@@ -100,8 +112,29 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if msg.song != nil {
 			m.currentSong = msg.song
+			m.elapsed = 0
+			m.duration = msg.song.Duration
 		}
 		m.paused = msg.paused
+		return m, tea.Batch(m.pollPlayerStatus(), tickPlayerStatus())
+	case playerTickMsg:
+		if m.currentSong == nil {
+			return m, nil
+		}
+
+		return m, m.pollPlayerStatus()
+	case playerStatusMsg:
+		if msg.err != nil {
+			m.err = msg.err
+			return m, tickPlayerStatus()
+		}
+
+		m.elapsed = msg.status.Elapsed
+		m.duration = msg.status.Duration
+		m.paused = msg.status.Paused
+		if m.currentSong != nil {
+			return m, tickPlayerStatus()
+		}
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c":
@@ -249,6 +282,21 @@ func (m *Model) playSong(song navidrome.Song) tea.Cmd {
 			paused: false,
 		}
 	}
+}
+
+func (m *Model) pollPlayerStatus() tea.Cmd {
+	player := m.player
+
+	return func() tea.Msg {
+		status, err := player.Status()
+		return playerStatusMsg{status: status, err: err}
+	}
+}
+
+func tickPlayerStatus() tea.Cmd {
+	return tea.Tick(statusPeriod, func(t time.Time) tea.Msg {
+		return playerTickMsg(t)
+	})
 }
 
 func clamp(value, minValue, maxValue int) int {

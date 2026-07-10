@@ -21,7 +21,8 @@ func (m Model) renderPlayer(width int) string {
 		}
 
 		nowPlaying = formatNowPlaying(*m.currentSong)
-		duration = formatDuration(m.currentSong.Duration)
+		elapsed = formatDuration(m.elapsed)
+		duration = formatDuration(m.currentDuration())
 	}
 
 	innerWidth := max(width-6, 20)
@@ -29,7 +30,7 @@ func (m Model) renderPlayer(width int) string {
 	barWidth := max(innerWidth-len(timeText)-3, 8)
 
 	titleLine := fmt.Sprintf("%s  %s", status, ui.Truncate(nowPlaying, max(innerWidth-3, 8)))
-	progressLine := fmt.Sprintf("%s  %s", progressBar(0, m.currentSongDuration(), barWidth), timeText)
+	progressLine := fmt.Sprintf("%s  %s", progressBar(m.elapsed, m.currentDuration(), barWidth), timeText)
 
 	return ui.PlayerBar.
 		Width(width - 2).
@@ -74,7 +75,10 @@ func progressBar(elapsed, duration, width int) string {
 	return "[" + strings.Repeat("=", filled) + strings.Repeat("-", innerWidth-filled) + "]"
 }
 
-func (m Model) currentSongDuration() int {
+func (m Model) currentDuration() int {
+	if m.duration > 0 {
+		return m.duration
+	}
 	if m.currentSong == nil {
 		return 0
 	}
