@@ -44,6 +44,41 @@ func TestSongNavigation(t *testing.T) {
 	}
 }
 
+func TestEnterOnLoadedSidebarItemOnlyMovesFocus(t *testing.T) {
+	m := loadedModel()
+	m.focused = playlistsPane
+	m.loadedPlaylistID = "playlist-1"
+
+	updated, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = updated.(Model)
+
+	if cmd != nil {
+		t.Fatal("expected no reload command")
+	}
+	if m.focused != songsPane {
+		t.Fatalf("expected songs pane focus, got %v", m.focused)
+	}
+	if m.selectedSong != 0 {
+		t.Fatalf("expected first song selected, got %d", m.selectedSong)
+	}
+}
+
+func TestEnterOnUnloadedSidebarItemLoadsSelection(t *testing.T) {
+	m := loadedModel()
+	m.focused = playlistsPane
+	m.loadedPlaylistID = "playlist-2"
+
+	updated, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = updated.(Model)
+
+	if cmd == nil {
+		t.Fatal("expected reload command")
+	}
+	if m.focused != songsPane {
+		t.Fatalf("expected songs pane focus, got %v", m.focused)
+	}
+}
+
 func TestSpaceReturnsPlayCommand(t *testing.T) {
 	m := loadedModel()
 	m.focused = songsPane
@@ -282,6 +317,43 @@ func TestPlaylistsLoadedLoadsFirstPlaylist(t *testing.T) {
 	}
 }
 
+func TestSongsLoadedStoresLoadedPlaylist(t *testing.T) {
+	m := loadedModel()
+	m.selectedPlaylist = 1
+
+	updated, _ := m.Update(songsLoadedMsg{
+		playlistID: "playlist-2",
+		songs:      []navidrome.Song{{ID: "song-4", Title: "Road Song"}},
+	})
+	m = updated.(Model)
+
+	if m.loadedPlaylistID != "playlist-2" {
+		t.Fatalf("expected loaded playlist-2, got %q", m.loadedPlaylistID)
+	}
+	if len(m.songs) != 1 || m.songs[0].ID != "song-4" {
+		t.Fatalf("expected new songs to be stored, got %+v", m.songs)
+	}
+}
+
+func TestStaleSongsLoadedIsIgnored(t *testing.T) {
+	m := loadedModel()
+	m.selectedPlaylist = 1
+	originalSongs := m.songs
+
+	updated, _ := m.Update(songsLoadedMsg{
+		playlistID: "playlist-1",
+		songs:      []navidrome.Song{{ID: "stale", Title: "Stale Song"}},
+	})
+	m = updated.(Model)
+
+	if m.loadedPlaylistID == "playlist-1" {
+		t.Fatal("expected stale playlist result to be ignored")
+	}
+	if len(m.songs) != len(originalSongs) || m.songs[0].ID != originalSongs[0].ID {
+		t.Fatalf("expected songs to stay unchanged, got %+v", m.songs)
+	}
+}
+
 func TestSwitchToArtistsLoadsArtists(t *testing.T) {
 	m := loadedModel()
 
@@ -373,6 +445,108 @@ func TestUpFromFirstSidebarItemFocusesDropdown(t *testing.T) {
 	}
 	if m.focused != modeSelectorPane {
 		t.Fatalf("expected mode selector focus, got %v", m.focused)
+	}
+}
+
+func TestSearchFiltersSidebarAndSelectsOriginalPlaylist(t *testing.T) {
+	m := loadedModel()
+	m.focused = playlistsPane
+
+	updated, _ := m.Update(tea.KeyPressMsg{Code: '/', Text: "/"})
+	m = updated.(Model)
+
+	var cmd tea.Cmd
+	sawCmd := false
+	for _, char := range "road" {
+		updated, cmd = m.Update(tea.KeyPressMsg{Code: char, Text: string(char)})
+		m = updated.(Model)
+		if cmd != nil {
+			sawCmd = true
+		}
+	}
+
+	if !m.searching {
+		t.Fatal("expected search to stay active")
+	}
+	if m.searchQuery != "road" {
+		t.Fatalf("expected search query road, got %q", m.searchQuery)
+	}
+	if m.selectedPlaylist != 1 {
+		t.Fatalf("expected Road Trip original playlist index 1, got %d", m.selectedPlaylist)
+	}
+	if !sawCmd {
+		t.Fatal("expected selected playlist load command")
+	}
+
+	content := m.renderSidebar(32, 18)
+	if !strings.Contains(content, "Road Trip") {
+		t.Fatalf("expected filtered playlist to render, got:\n%s", content)
+	}
+	if strings.Contains(content, "Favorites") {
+		t.Fatalf("expected non-matching playlist to be hidden, got:\n%s", content)
+	}
+}
+
+func TestSearchFiltersSongsAndKeepsOriginalSongIndex(t *testing.T) {
+	m := loadedModel()
+	m.focused = songsPane
+
+	updated, _ := m.Update(tea.KeyPressMsg{Code: '/', Text: "/"})
+	m = updated.(Model)
+
+	for _, char := range "sweet" {
+		updated, _ = m.Update(tea.KeyPressMsg{Code: char, Text: string(char)})
+		m = updated.(Model)
+	}
+
+	if m.selectedSong != 1 {
+		t.Fatalf("expected Sweet Emotion original song index 1, got %d", m.selectedSong)
+	}
+
+	content := m.renderSongs(80, 12)
+	if !strings.Contains(content, "Sweet Emotion") {
+		t.Fatalf("expected matching song to render, got:\n%s", content)
+	}
+	if strings.Contains(content, "Dream On") {
+		t.Fatalf("expected non-matching song to be hidden, got:\n%s", content)
+	}
+}
+
+func TestSearchNewPaneStartsWithEmptyQuery(t *testing.T) {
+	m := loadedModel()
+	m.searchPane = playlistsPane
+	m.searchQuery = "aero"
+	m.focused = songsPane
+
+	updated, _ := m.Update(tea.KeyPressMsg{Code: '/', Text: "/"})
+	m = updated.(Model)
+
+	if !m.searching {
+		t.Fatal("expected search to start")
+	}
+	if m.searchPane != songsPane {
+		t.Fatalf("expected song pane search, got %v", m.searchPane)
+	}
+	if m.searchQuery != "" {
+		t.Fatalf("expected fresh song filter, got %q", m.searchQuery)
+	}
+}
+
+func TestSearchEscapeClearsFilter(t *testing.T) {
+	m := loadedModel()
+	m.focused = songsPane
+	m.searching = true
+	m.searchPane = songsPane
+	m.searchQuery = "sweet"
+
+	updated, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
+	m = updated.(Model)
+
+	if m.searching {
+		t.Fatal("expected search to stop")
+	}
+	if m.searchQuery != "" {
+		t.Fatalf("expected search query to clear, got %q", m.searchQuery)
 	}
 }
 
@@ -468,6 +642,41 @@ func TestArtistMainAreaRendersAlbumGroups(t *testing.T) {
 		if !strings.Contains(content, expected) {
 			t.Fatalf("expected %q in artist view, got:\n%s", expected, content)
 		}
+	}
+}
+
+func TestArtistSearchKeepsMatchingAlbumGroups(t *testing.T) {
+	m := loadedModel()
+	m.mode = artistsMode
+	m.focused = songsPane
+	m.searchPane = songsPane
+	m.searchQuery = "emotion"
+	m.artists = []navidrome.Artist{{ID: "artist-1", Name: "Aerosmith"}}
+	m.albums = []albumGroup{
+		{
+			album: navidrome.Album{ID: "album-1", Name: "Aerosmith"},
+			songs: []navidrome.Song{
+				{ID: "song-1", Title: "Dream On", Duration: 268},
+			},
+		},
+		{
+			album: navidrome.Album{ID: "album-2", Name: "Toys in the Attic"},
+			songs: []navidrome.Song{
+				{ID: "song-2", Title: "Sweet Emotion", Duration: 274},
+			},
+		},
+	}
+	m.songs = []navidrome.Song{
+		{ID: "song-1", Title: "Dream On", Duration: 268},
+		{ID: "song-2", Title: "Sweet Emotion", Duration: 274},
+	}
+
+	content := m.renderMainArea(80, 12)
+	if !strings.Contains(content, "> Toys in the Attic") || !strings.Contains(content, "Sweet Emotion") {
+		t.Fatalf("expected matching album group to render, got:\n%s", content)
+	}
+	if strings.Contains(content, "> Aerosmith") || strings.Contains(content, "Dream On") {
+		t.Fatalf("expected non-matching album group to be hidden, got:\n%s", content)
 	}
 }
 

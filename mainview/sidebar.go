@@ -14,8 +14,11 @@ func (m Model) renderSidebar(width, height int) string {
 		"",
 		modeSelector(width-4, m.mode, m.focused == modeSelectorPane),
 		"",
-		paneTitle(m.sidebarTitle(), m.focused == playlistsPane),
 	}
+	if m.filterQueryFor(playlistsPane) != "" || m.searching && m.searchPane == playlistsPane {
+		lines = append(lines, searchLine(m.searchQuery))
+	}
+	lines = append(lines, paneTitle(m.sidebarTitle(), m.focused == playlistsPane))
 
 	if m.loading && m.sidebarItemCount() == 0 {
 		lines = append(lines, ui.Subtitle.Render("Loading..."))
@@ -68,11 +71,17 @@ func (m Model) sidebarItems(width, height int) []string {
 			return []string{ui.Subtitle.Render("No artists found")}
 		}
 
-		start, end := visibleRange(m.selectedArtist, len(m.artists), visibleSidebarRows(height))
+		artists := m.filteredArtists()
+		if len(artists) == 0 && m.filterQueryFor(playlistsPane) != "" {
+			return []string{ui.Subtitle.Render("No matches")}
+		}
+
+		selected := m.selectedArtistPosition(artists)
+		start, end := visibleRange(selected, len(artists), m.visibleSidebarRows(height))
 		lines := make([]string, 0, end-start)
 		for i := start; i < end; i++ {
-			artist := m.artists[i]
-			line := selectableLine(artist.Name, i == m.selectedArtist, m.focused == playlistsPane, width)
+			artist := artists[i]
+			line := selectableLine(artist.artist.Name, artist.index == m.selectedArtist, m.focused == playlistsPane, width)
 			lines = append(lines, line)
 		}
 
@@ -82,11 +91,17 @@ func (m Model) sidebarItems(width, height int) []string {
 			return []string{ui.Subtitle.Render("No playlists found")}
 		}
 
-		start, end := visibleRange(m.selectedPlaylist, len(m.playlists), visibleSidebarRows(height))
+		playlists := m.filteredPlaylists()
+		if len(playlists) == 0 && m.filterQueryFor(playlistsPane) != "" {
+			return []string{ui.Subtitle.Render("No matches")}
+		}
+
+		selected := m.selectedPlaylistPosition(playlists)
+		start, end := visibleRange(selected, len(playlists), m.visibleSidebarRows(height))
 		lines := make([]string, 0, end-start)
 		for i := start; i < end; i++ {
-			playlist := m.playlists[i]
-			line := selectableLine(playlist.Name, i == m.selectedPlaylist, m.focused == playlistsPane, width)
+			playlist := playlists[i]
+			line := selectableLine(playlist.playlist.Name, playlist.index == m.selectedPlaylist, m.focused == playlistsPane, width)
 			lines = append(lines, line)
 		}
 
@@ -94,6 +109,10 @@ func (m Model) sidebarItems(width, height int) []string {
 	}
 }
 
-func visibleSidebarRows(height int) int {
+func (m Model) visibleSidebarRows(height int) int {
+	if m.filterQueryFor(playlistsPane) != "" || m.searching && m.searchPane == playlistsPane {
+		return max(height-9, 1)
+	}
+
 	return max(height-8, 1)
 }

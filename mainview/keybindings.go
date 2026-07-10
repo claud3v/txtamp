@@ -15,6 +15,7 @@ const (
 	actionShowArtists   action = "show_artists"
 	actionShowPlaylists action = "show_playlists"
 	actionCloseDialog   action = "close_dialog"
+	actionStartSearch   action = "start_search"
 )
 
 type keyBinding struct {
@@ -28,6 +29,7 @@ var defaultKeyBindings = []keyBinding{
 	{Key: "esc", Action: actionCloseDialog, Description: "Close dialog"},
 	{Key: "left", Action: actionFocusSidebar, Description: "Focus sidebar"},
 	{Key: "right", Action: actionFocusMainArea, Description: "Focus songs"},
+	{Key: "/", Action: actionStartSearch, Description: "Filter focused pane"},
 	{Key: "1", Action: actionShowArtists, Description: "Show artists"},
 	{Key: "2", Action: actionShowPlaylists, Description: "Show playlists"},
 	{Key: "up", Action: actionMoveUp, Description: "Move up"},

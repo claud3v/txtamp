@@ -51,6 +51,11 @@ type Model struct {
 	mode             sidebarMode
 	modeDialogOpen   bool
 	selectedMode     sidebarMode
+	searching        bool
+	searchPane       focusPane
+	searchQuery      string
+	loadedPlaylistID string
+	loadedArtistID   string
 	selectedPlaylist int
 	selectedArtist   int
 	selectedSong     int
@@ -75,8 +80,9 @@ type playlistsLoadedMsg struct {
 }
 
 type songsLoadedMsg struct {
-	songs []navidrome.Song
-	err   error
+	playlistID string
+	songs      []navidrome.Song
+	err        error
 }
 
 type artistsLoadedMsg struct {
@@ -85,9 +91,10 @@ type artistsLoadedMsg struct {
 }
 
 type artistLoadedMsg struct {
-	albums []albumGroup
-	songs  []navidrome.Song
-	err    error
+	artistID string
+	albums   []albumGroup
+	songs    []navidrome.Song
+	err      error
 }
 
 type playbackMsg struct {
@@ -154,9 +161,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.mode != playlistsMode {
 			return m, nil
 		}
+		if len(m.playlists) > 0 && msg.playlistID != m.playlists[m.selectedPlaylist].ID {
+			return m, nil
+		}
 
 		m.loading = false
 		m.err = msg.err
+		m.loadedPlaylistID = msg.playlistID
 		m.albums = nil
 		m.songs = msg.songs
 		m.selectedSong = 0
@@ -183,9 +194,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.mode != artistsMode {
 			return m, nil
 		}
+		if len(m.artists) > 0 && msg.artistID != m.artists[m.selectedArtist].ID {
+			return m, nil
+		}
 
 		m.loading = false
 		m.err = msg.err
+		m.loadedArtistID = msg.artistID
 		m.albums = msg.albums
 		m.songs = msg.songs
 		m.selectedSong = 0
@@ -240,6 +255,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tickPlayerStatus(m.playbackID)
 		}
 	case tea.KeyMsg:
+		if m.searching {
+			cmd := m.handleSearchKey(msg)
+			return m, cmd
+		}
+
 		action, ok := actionForKey(msg.String())
 		if !ok {
 			return m, nil
@@ -260,6 +280,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.focused = playlistsPane
 		case actionFocusMainArea:
 			m.focused = songsPane
+		case actionCloseDialog:
+			m.clearSearch()
+		case actionStartSearch:
+			m.startSearch()
 		case actionMoveUp:
 			cmd := m.moveSelection(-1)
 			return m, cmd
@@ -374,18 +398,21 @@ func (m *Model) moveSelection(delta int) tea.Cmd {
 			m.focused = playlistsPane
 		}
 	case playlistsPane:
-		if delta < 0 && m.selectedSidebarIndex() == 0 {
+		if delta < 0 && m.selectedSidebarPosition() == 0 {
 			m.focused = modeSelectorPane
 			return nil
 		}
 
 		return m.moveSidebarSelection(delta)
 	case songsPane:
-		if len(m.songs) == 0 {
+		songs := m.filteredSongs()
+		if len(songs) == 0 {
 			return nil
 		}
 
-		m.selectedSong = clamp(m.selectedSong+delta, 0, len(m.songs)-1)
+		position := m.selectedSongPosition(songs)
+		position = clamp(position+delta, 0, len(songs)-1)
+		m.selectedSong = songs[position].index
 	}
 
 	return nil
@@ -400,22 +427,19 @@ func (m *Model) activateSelection() tea.Cmd {
 	if m.focused == playlistsPane {
 		m.focused = songsPane
 		m.selectedSong = 0
+		if m.selectedSidebarItemLoaded() {
+			return nil
+		}
+
 		return m.loadSelectedSidebarItem()
 	}
 
-	if len(m.songs) == 0 {
+	songs := m.filteredSongs()
+	if len(songs) == 0 {
 		return nil
 	}
 
 	return m.playSongAt(m.selectedSong)
-}
-
-func (m *Model) selectedSidebarIndex() int {
-	if m.mode == artistsMode {
-		return m.selectedArtist
-	}
-
-	return m.selectedPlaylist
 }
 
 func (m *Model) openModeDialog() {
@@ -460,23 +484,29 @@ func (m *Model) applySelectedMode() tea.Cmd {
 func (m *Model) moveSidebarSelection(delta int) tea.Cmd {
 	switch m.mode {
 	case playlistsMode:
-		if len(m.playlists) == 0 {
+		playlists := m.filteredPlaylists()
+		if len(playlists) == 0 {
 			return nil
 		}
 
 		previous := m.selectedPlaylist
-		m.selectedPlaylist = clamp(m.selectedPlaylist+delta, 0, len(m.playlists)-1)
+		position := m.selectedPlaylistPosition(playlists)
+		position = clamp(position+delta, 0, len(playlists)-1)
+		m.selectedPlaylist = playlists[position].index
 		m.selectedSong = 0
 		if m.selectedPlaylist != previous {
 			return m.loadSelectedPlaylist()
 		}
 	case artistsMode:
-		if len(m.artists) == 0 {
+		artists := m.filteredArtists()
+		if len(artists) == 0 {
 			return nil
 		}
 
 		previous := m.selectedArtist
-		m.selectedArtist = clamp(m.selectedArtist+delta, 0, len(m.artists)-1)
+		position := m.selectedArtistPosition(artists)
+		position = clamp(position+delta, 0, len(artists)-1)
+		m.selectedArtist = artists[position].index
 		m.selectedSong = 0
 		if m.selectedArtist != previous {
 			return m.loadSelectedArtist()
@@ -503,19 +533,23 @@ func (m *Model) switchMode(mode sidebarMode) tea.Cmd {
 			return m.loadPlaylists()
 		}
 
-		return m.loadSelectedPlaylist()
+		return m.loadSelectedSidebarItem()
 	case artistsMode:
 		if len(m.artists) == 0 {
 			return m.loadArtists()
 		}
 
-		return m.loadSelectedArtist()
+		return m.loadSelectedSidebarItem()
 	default:
 		return nil
 	}
 }
 
 func (m *Model) loadSelectedSidebarItem() tea.Cmd {
+	if m.selectedSidebarItemLoaded() {
+		return nil
+	}
+
 	switch m.mode {
 	case playlistsMode:
 		return m.loadSelectedPlaylist()
@@ -523,6 +557,17 @@ func (m *Model) loadSelectedSidebarItem() tea.Cmd {
 		return m.loadSelectedArtist()
 	default:
 		return nil
+	}
+}
+
+func (m Model) selectedSidebarItemLoaded() bool {
+	switch m.mode {
+	case playlistsMode:
+		return len(m.playlists) > 0 && m.loadedPlaylistID == m.playlists[m.selectedPlaylist].ID
+	case artistsMode:
+		return len(m.artists) > 0 && m.loadedArtistID == m.artists[m.selectedArtist].ID
+	default:
+		return false
 	}
 }
 
@@ -568,7 +613,7 @@ func (m *Model) loadSelectedPlaylist() tea.Cmd {
 		defer cancel()
 
 		songs, err := m.client.GetPlaylist(ctx, playlistID)
-		return songsLoadedMsg{songs: songs, err: err}
+		return songsLoadedMsg{playlistID: playlistID, songs: songs, err: err}
 	}
 }
 
@@ -600,7 +645,7 @@ func (m *Model) loadSelectedArtist() tea.Cmd {
 
 		albums, err := m.client.GetArtistAlbums(ctx, artistID)
 		if err != nil {
-			return artistLoadedMsg{err: err}
+			return artistLoadedMsg{artistID: artistID, err: err}
 		}
 
 		var groups []albumGroup
@@ -608,14 +653,14 @@ func (m *Model) loadSelectedArtist() tea.Cmd {
 		for _, album := range albums {
 			albumSongs, err := m.client.GetAlbumSongs(ctx, album.ID)
 			if err != nil {
-				return artistLoadedMsg{err: err}
+				return artistLoadedMsg{artistID: artistID, err: err}
 			}
 
 			groups = append(groups, albumGroup{album: album, songs: albumSongs})
 			songs = append(songs, albumSongs...)
 		}
 
-		return artistLoadedMsg{albums: groups, songs: songs}
+		return artistLoadedMsg{artistID: artistID, albums: groups, songs: songs}
 	}
 }
 
