@@ -191,6 +191,22 @@ func TestNextKeyPlaysNextSong(t *testing.T) {
 	}
 }
 
+func TestNextAliasPlaysNextSong(t *testing.T) {
+	m := loadedModel()
+	m.currentSong = &m.songs[0]
+	m.currentSongIndex = 0
+
+	updated, cmd := m.Update(tea.KeyPressMsg{Code: ']', Text: "]"})
+	m = updated.(Model)
+
+	if cmd == nil {
+		t.Fatal("expected next song play command")
+	}
+	if m.selectedSong != 1 {
+		t.Fatalf("expected second song to be selected, got %d", m.selectedSong)
+	}
+}
+
 func TestPreviousKeyRestartsCurrentSong(t *testing.T) {
 	m := loadedModel()
 	m.currentSong = &m.songs[1]
@@ -217,6 +233,24 @@ func TestPreviousKeyQuickPressPlaysPreviousSong(t *testing.T) {
 	m.elapsed = 1
 
 	updated, cmd := m.Update(tea.KeyPressMsg{Code: 'p', Text: "p"})
+	m = updated.(Model)
+
+	if cmd == nil {
+		t.Fatal("expected previous song play command")
+	}
+	if m.selectedSong != 0 {
+		t.Fatalf("expected first song to be selected, got %d", m.selectedSong)
+	}
+}
+
+func TestPreviousAliasPlaysPreviousSong(t *testing.T) {
+	m := loadedModel()
+	m.currentSong = &m.songs[1]
+	m.currentSongIndex = 1
+	m.selectedSong = 1
+	m.elapsed = 1
+
+	updated, cmd := m.Update(tea.KeyPressMsg{Code: '[', Text: "["})
 	m = updated.(Model)
 
 	if cmd == nil {

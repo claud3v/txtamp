@@ -169,30 +169,35 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tickPlayerStatus(m.playbackID)
 		}
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "ctrl+c":
+		action, ok := actionForKey(msg.String())
+		if !ok {
+			return m, nil
+		}
+
+		switch action {
+		case actionQuit:
 			m.player.Stop()
 			return m, tea.Quit
-		case "left":
+		case actionFocusSidebar:
 			m.focused = playlistsPane
-		case "right":
+		case actionFocusMainArea:
 			m.focused = songsPane
-		case "up":
+		case actionMoveUp:
 			cmd := m.moveSelection(-1)
 			return m, cmd
-		case "down":
+		case actionMoveDown:
 			cmd := m.moveSelection(1)
 			return m, cmd
-		case "enter":
+		case actionActivate:
 			cmd := m.activateSelection()
 			return m, cmd
-		case " ", "space":
+		case actionPlayPause:
 			cmd := m.togglePlayPause()
 			return m, cmd
-		case "n":
+		case actionNextSong:
 			cmd := m.playNextSong()
 			return m, cmd
-		case "p":
+		case actionPreviousSong:
 			cmd := m.playPreviousSong()
 			return m, cmd
 		}
