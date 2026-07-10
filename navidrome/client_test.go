@@ -156,6 +156,131 @@ func TestGetPlaylist(t *testing.T) {
 	}
 }
 
+func TestListArtists(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/rest/getArtists.view" {
+			t.Fatalf("expected /rest/getArtists.view, got %q", r.URL.Path)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{
+			"subsonic-response": {
+				"status": "ok",
+				"artists": {
+					"index": [
+						{"name": "A", "artist": [{"id": "artist-1", "name": "Aerosmith", "albumCount": 2}]},
+						{"name": "B", "artist": [{"id": "artist-2", "name": "Black Sabbath", "albumCount": 3}]}
+					]
+				}
+			}
+		}`))
+	}))
+	defer server.Close()
+
+	client := Client{
+		BaseURL:  server.URL,
+		Username: "john",
+		Password: "secret",
+	}
+
+	artists, err := client.ListArtists(context.Background())
+	if err != nil {
+		t.Fatalf("expected artists to load, got %v", err)
+	}
+	if len(artists) != 2 {
+		t.Fatalf("expected 2 artists, got %d", len(artists))
+	}
+	if artists[0].ID != "artist-1" || artists[0].Name != "Aerosmith" || artists[0].AlbumCount != 2 {
+		t.Fatalf("unexpected artist: %+v", artists[0])
+	}
+}
+
+func TestGetArtistAlbums(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/rest/getArtist.view" {
+			t.Fatalf("expected /rest/getArtist.view, got %q", r.URL.Path)
+		}
+		if r.URL.Query().Get("id") != "artist-1" {
+			t.Fatalf("expected artist id, got %q", r.URL.Query().Get("id"))
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{
+			"subsonic-response": {
+				"status": "ok",
+				"artist": {
+					"id": "artist-1",
+					"name": "Aerosmith",
+					"album": [
+						{"id": "album-1", "name": "Toys in the Attic", "artist": "Aerosmith", "songCount": 9, "duration": 2240}
+					]
+				}
+			}
+		}`))
+	}))
+	defer server.Close()
+
+	client := Client{
+		BaseURL:  server.URL,
+		Username: "john",
+		Password: "secret",
+	}
+
+	albums, err := client.GetArtistAlbums(context.Background(), "artist-1")
+	if err != nil {
+		t.Fatalf("expected albums to load, got %v", err)
+	}
+	if len(albums) != 1 {
+		t.Fatalf("expected 1 album, got %d", len(albums))
+	}
+	if albums[0].ID != "album-1" || albums[0].Name != "Toys in the Attic" {
+		t.Fatalf("unexpected album: %+v", albums[0])
+	}
+}
+
+func TestGetAlbumSongs(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/rest/getAlbum.view" {
+			t.Fatalf("expected /rest/getAlbum.view, got %q", r.URL.Path)
+		}
+		if r.URL.Query().Get("id") != "album-1" {
+			t.Fatalf("expected album id, got %q", r.URL.Query().Get("id"))
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{
+			"subsonic-response": {
+				"status": "ok",
+				"album": {
+					"id": "album-1",
+					"name": "Toys in the Attic",
+					"song": [
+						{"id": "song-1", "title": "Sweet Emotion", "artist": "Aerosmith", "album": "Toys in the Attic", "track": 1, "duration": 274}
+					]
+				}
+			}
+		}`))
+	}))
+	defer server.Close()
+
+	client := Client{
+		BaseURL:  server.URL,
+		Username: "john",
+		Password: "secret",
+	}
+
+	songs, err := client.GetAlbumSongs(context.Background(), "album-1")
+	if err != nil {
+		t.Fatalf("expected songs to load, got %v", err)
+	}
+	if len(songs) != 1 {
+		t.Fatalf("expected 1 song, got %d", len(songs))
+	}
+	if songs[0].ID != "song-1" || songs[0].Title != "Sweet Emotion" {
+		t.Fatalf("unexpected song: %+v", songs[0])
+	}
+}
+
 func TestStreamURL(t *testing.T) {
 	client := Client{
 		BaseURL:  "https://music.example.com",

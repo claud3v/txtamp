@@ -37,6 +37,19 @@ func songLine(text string, index int, m Model, width int) string {
 	return styledLine(prefix, text, selected, m.focused == songsPane, playing, width)
 }
 
+func nestedSongLine(text string, index int, m Model, width int) string {
+	selected := index == m.selectedSong
+	playing := m.currentSong != nil && index < len(m.songs) && m.songs[index].ID == m.currentSong.ID
+	prefix := "    "
+	if selected {
+		prefix = "  > "
+	} else if playing {
+		prefix = "  * "
+	}
+
+	return styledLine(prefix, text, selected, m.focused == songsPane, playing, width)
+}
+
 func styledLine(prefix, text string, selected, focused, playing bool, width int) string {
 	line := prefix + ui.Truncate(text, max(width-len(prefix), 1))
 	if selected && focused {

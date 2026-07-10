@@ -72,6 +72,25 @@ var (
 			Bold(true).
 			Foreground(lipgloss.Color("#8BE9FD"))
 
+	// Sidebar mode selector.
+	ModeSelector = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("#7F8C8D"))
+
+	// Active sidebar mode.
+	ModeSelectorActive = lipgloss.NewStyle().
+				Bold(true).
+				Foreground(lipgloss.Color("#282A36")).
+				Background(lipgloss.Color("#8BE9FD")).
+				Padding(0, 1)
+
+	// Centered modal dialog.
+	Dialog = lipgloss.NewStyle().
+		Padding(1, 3).
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("#8BE9FD")).
+		Background(lipgloss.Color("#282A36"))
+
 	// Focused pane title.
 	PaneTitleFocused = PaneTitle.Copy().
 				Underline(true)

@@ -3,6 +3,7 @@ package mainview
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 	"txtamp/navidrome"
 	"txtamp/player"
@@ -10,6 +11,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 const (
@@ -21,9 +23,22 @@ const (
 type focusPane int
 
 const (
-	playlistsPane focusPane = iota
+	modeSelectorPane focusPane = iota
+	playlistsPane
 	songsPane
 )
+
+type sidebarMode int
+
+const (
+	bandsMode sidebarMode = iota
+	playlistsMode
+)
+
+type albumGroup struct {
+	album navidrome.Album
+	songs []navidrome.Song
+}
 
 type Model struct {
 	width       int
@@ -33,7 +48,11 @@ type Model struct {
 	player      *player.Player
 
 	focused          focusPane
+	mode             sidebarMode
+	modeDialogOpen   bool
+	selectedMode     sidebarMode
 	selectedPlaylist int
+	selectedArtist   int
 	selectedSong     int
 	currentSong      *navidrome.Song
 	paused           bool
@@ -45,6 +64,8 @@ type Model struct {
 	err              error
 
 	playlists []navidrome.Playlist
+	artists   []navidrome.Artist
+	albums    []albumGroup
 	songs     []navidrome.Song
 }
 
@@ -56,6 +77,17 @@ type playlistsLoadedMsg struct {
 type songsLoadedMsg struct {
 	songs []navidrome.Song
 	err   error
+}
+
+type artistsLoadedMsg struct {
+	artists []navidrome.Artist
+	err     error
+}
+
+type artistLoadedMsg struct {
+	albums []albumGroup
+	songs  []navidrome.Song
+	err    error
 }
 
 type playbackMsg struct {
@@ -86,6 +118,7 @@ func New(connectedTo string, client navidrome.Client) Model {
 		client:      client,
 		player:      player.New(),
 		focused:     playlistsPane,
+		mode:        playlistsMode,
 		loading:     true,
 	}
 }
@@ -100,9 +133,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 	case playlistsLoadedMsg:
+		m.playlists = msg.playlists
+		if m.mode != playlistsMode {
+			return m, nil
+		}
+
 		m.loading = false
 		m.err = msg.err
-		m.playlists = msg.playlists
 		m.songs = nil
 		m.selectedPlaylist = 0
 		m.selectedSong = 0
@@ -114,8 +151,42 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmd := m.loadSelectedPlaylist()
 		return m, cmd
 	case songsLoadedMsg:
+		if m.mode != playlistsMode {
+			return m, nil
+		}
+
 		m.loading = false
 		m.err = msg.err
+		m.albums = nil
+		m.songs = msg.songs
+		m.selectedSong = 0
+	case artistsLoadedMsg:
+		m.artists = msg.artists
+		if m.mode != bandsMode {
+			return m, nil
+		}
+
+		m.loading = false
+		m.err = msg.err
+		m.albums = nil
+		m.songs = nil
+		m.selectedArtist = 0
+		m.selectedSong = 0
+
+		if msg.err != nil || len(m.artists) == 0 {
+			return m, nil
+		}
+
+		cmd := m.loadSelectedArtist()
+		return m, cmd
+	case artistLoadedMsg:
+		if m.mode != bandsMode {
+			return m, nil
+		}
+
+		m.loading = false
+		m.err = msg.err
+		m.albums = msg.albums
 		m.songs = msg.songs
 		m.selectedSong = 0
 	case playbackMsg:
@@ -174,10 +245,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		switch action {
-		case actionQuit:
+		if action == actionQuit {
 			m.player.Stop()
 			return m, tea.Quit
+		}
+
+		if m.modeDialogOpen {
+			cmd := m.handleModeDialogAction(action)
+			return m, cmd
+		}
+
+		switch action {
 		case actionFocusSidebar:
 			m.focused = playlistsPane
 		case actionFocusMainArea:
@@ -200,6 +278,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case actionPreviousSong:
 			cmd := m.playPreviousSong()
 			return m, cmd
+		case actionShowBands:
+			cmd := m.switchMode(bandsMode)
+			return m, cmd
+		case actionShowPlaylists:
+			cmd := m.switchMode(playlistsMode)
+			return m, cmd
 		}
 	}
 
@@ -209,12 +293,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m Model) View() tea.View {
 	layout := ui.NewShellLayout(m.width, m.height)
 
-	sidebar := m.renderPlaylists(layout.SidebarWidth, layout.BodyHeight)
-	songs := m.renderSongs(layout.MainWidth, layout.BodyHeight)
-	body := lipgloss.JoinHorizontal(lipgloss.Top, sidebar, songs)
+	sidebar := m.renderSidebar(layout.SidebarWidth, layout.BodyHeight)
+	mainArea := m.renderMainArea(layout.MainWidth, layout.BodyHeight)
+	body := lipgloss.JoinHorizontal(lipgloss.Top, sidebar, mainArea)
 	player := m.renderPlayer(layout.Width)
 
 	content := lipgloss.JoinVertical(lipgloss.Left, body, player)
+	if m.modeDialogOpen {
+		content = overlayCentered(content, m.renderModeDialog(), layout.Width, layout.Height)
+	}
 
 	view := tea.NewView(content)
 	view.AltScreen = true
@@ -222,19 +309,77 @@ func (m Model) View() tea.View {
 	return view
 }
 
+func overlayCentered(content, overlay string, width, height int) string {
+	overlayWidth := lipgloss.Width(overlay)
+	overlayHeight := lipgloss.Height(overlay)
+	left := max((width-overlayWidth)/2, 0)
+	top := max((height-overlayHeight)/2, 0)
+
+	contentLines := strings.Split(content, "\n")
+	overlayLines := strings.Split(overlay, "\n")
+	for len(contentLines) < height {
+		contentLines = append(contentLines, "")
+	}
+
+	for i, overlayLine := range overlayLines {
+		target := top + i
+		if target < 0 || target >= len(contentLines) {
+			continue
+		}
+
+		line := contentLines[target]
+		prefix := ansi.Cut(line, 0, left)
+		prefix += strings.Repeat(" ", max(left-ansi.StringWidth(prefix), 0))
+
+		rightStart := left + overlayWidth
+		suffix := ""
+		if ansi.StringWidth(line) > rightStart {
+			suffix = ansi.Cut(line, rightStart, width)
+		}
+
+		contentLines[target] = prefix + overlayLine + suffix
+	}
+
+	return strings.Join(contentLines, "\n")
+}
+
+func (m Model) renderModeDialog() string {
+	width := 22
+	rows := []string{
+		modeDialogRow("Bands", "1", m.selectedMode == bandsMode, width),
+		modeDialogRow("Playlists", "2", m.selectedMode == playlistsMode, width),
+	}
+
+	return ui.Dialog.Render(lipgloss.JoinVertical(lipgloss.Left, rows...))
+}
+
+func modeDialogRow(label, key string, selected bool, width int) string {
+	text := lipgloss.JoinHorizontal(
+		lipgloss.Top,
+		label,
+		lipgloss.PlaceHorizontal(max(width-lipgloss.Width(label), 1), lipgloss.Right, key),
+	)
+
+	if selected {
+		return ui.SelectedRowFocused.Width(width).Render(text)
+	}
+
+	return lipgloss.NewStyle().Width(width).Render(text)
+}
+
 func (m *Model) moveSelection(delta int) tea.Cmd {
 	switch m.focused {
+	case modeSelectorPane:
+		if delta > 0 {
+			m.focused = playlistsPane
+		}
 	case playlistsPane:
-		if len(m.playlists) == 0 {
+		if delta < 0 && m.selectedSidebarIndex() == 0 {
+			m.focused = modeSelectorPane
 			return nil
 		}
 
-		previous := m.selectedPlaylist
-		m.selectedPlaylist = clamp(m.selectedPlaylist+delta, 0, len(m.playlists)-1)
-		m.selectedSong = 0
-		if m.selectedPlaylist != previous {
-			return m.loadSelectedPlaylist()
-		}
+		return m.moveSidebarSelection(delta)
 	case songsPane:
 		if len(m.songs) == 0 {
 			return nil
@@ -247,10 +392,15 @@ func (m *Model) moveSelection(delta int) tea.Cmd {
 }
 
 func (m *Model) activateSelection() tea.Cmd {
+	if m.focused == modeSelectorPane {
+		m.openModeDialog()
+		return nil
+	}
+
 	if m.focused == playlistsPane {
 		m.focused = songsPane
 		m.selectedSong = 0
-		return m.loadSelectedPlaylist()
+		return m.loadSelectedSidebarItem()
 	}
 
 	if len(m.songs) == 0 {
@@ -258,6 +408,122 @@ func (m *Model) activateSelection() tea.Cmd {
 	}
 
 	return m.playSongAt(m.selectedSong)
+}
+
+func (m *Model) selectedSidebarIndex() int {
+	if m.mode == bandsMode {
+		return m.selectedArtist
+	}
+
+	return m.selectedPlaylist
+}
+
+func (m *Model) openModeDialog() {
+	m.modeDialogOpen = true
+	m.selectedMode = m.mode
+}
+
+func (m *Model) handleModeDialogAction(action action) tea.Cmd {
+	switch action {
+	case actionCloseDialog:
+		m.modeDialogOpen = false
+	case actionMoveUp, actionMoveDown:
+		m.toggleSelectedMode()
+	case actionActivate:
+		return m.applySelectedMode()
+	case actionShowBands:
+		m.selectedMode = bandsMode
+		return m.applySelectedMode()
+	case actionShowPlaylists:
+		m.selectedMode = playlistsMode
+		return m.applySelectedMode()
+	}
+
+	return nil
+}
+
+func (m *Model) toggleSelectedMode() {
+	if m.selectedMode == bandsMode {
+		m.selectedMode = playlistsMode
+		return
+	}
+
+	m.selectedMode = bandsMode
+}
+
+func (m *Model) applySelectedMode() tea.Cmd {
+	mode := m.selectedMode
+	m.modeDialogOpen = false
+	return m.switchMode(mode)
+}
+
+func (m *Model) moveSidebarSelection(delta int) tea.Cmd {
+	switch m.mode {
+	case playlistsMode:
+		if len(m.playlists) == 0 {
+			return nil
+		}
+
+		previous := m.selectedPlaylist
+		m.selectedPlaylist = clamp(m.selectedPlaylist+delta, 0, len(m.playlists)-1)
+		m.selectedSong = 0
+		if m.selectedPlaylist != previous {
+			return m.loadSelectedPlaylist()
+		}
+	case bandsMode:
+		if len(m.artists) == 0 {
+			return nil
+		}
+
+		previous := m.selectedArtist
+		m.selectedArtist = clamp(m.selectedArtist+delta, 0, len(m.artists)-1)
+		m.selectedSong = 0
+		if m.selectedArtist != previous {
+			return m.loadSelectedArtist()
+		}
+	}
+
+	return nil
+}
+
+func (m *Model) switchMode(mode sidebarMode) tea.Cmd {
+	if m.mode == mode {
+		return nil
+	}
+
+	m.mode = mode
+	m.focused = playlistsPane
+	m.selectedSong = 0
+	m.songs = nil
+	m.albums = nil
+
+	switch mode {
+	case playlistsMode:
+		if len(m.playlists) == 0 {
+			return m.loadPlaylists()
+		}
+
+		return m.loadSelectedPlaylist()
+	case bandsMode:
+		if len(m.artists) == 0 {
+			return m.loadArtists()
+		}
+
+		return m.loadSelectedArtist()
+	default:
+		return nil
+	}
+}
+
+func (m *Model) loadSelectedSidebarItem() tea.Cmd {
+	switch m.mode {
+	case playlistsMode:
+		return m.loadSelectedPlaylist()
+	case bandsMode:
+		return m.loadSelectedArtist()
+	default:
+		return nil
+	}
 }
 
 func (m *Model) togglePlayPause() tea.Cmd {
@@ -303,6 +569,53 @@ func (m *Model) loadSelectedPlaylist() tea.Cmd {
 
 		songs, err := m.client.GetPlaylist(ctx, playlistID)
 		return songsLoadedMsg{songs: songs, err: err}
+	}
+}
+
+func (m *Model) loadArtists() tea.Cmd {
+	m.loading = true
+
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), loadTimeout)
+		defer cancel()
+
+		artists, err := m.client.ListArtists(ctx)
+		return artistsLoadedMsg{artists: artists, err: err}
+	}
+}
+
+func (m *Model) loadSelectedArtist() tea.Cmd {
+	if len(m.artists) == 0 {
+		return nil
+	}
+
+	artistID := m.artists[m.selectedArtist].ID
+	m.loading = true
+	m.albums = nil
+	m.songs = nil
+
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), loadTimeout)
+		defer cancel()
+
+		albums, err := m.client.GetArtistAlbums(ctx, artistID)
+		if err != nil {
+			return artistLoadedMsg{err: err}
+		}
+
+		var groups []albumGroup
+		var songs []navidrome.Song
+		for _, album := range albums {
+			albumSongs, err := m.client.GetAlbumSongs(ctx, album.ID)
+			if err != nil {
+				return artistLoadedMsg{err: err}
+			}
+
+			groups = append(groups, albumGroup{album: album, songs: albumSongs})
+			songs = append(songs, albumSongs...)
+		}
+
+		return artistLoadedMsg{albums: groups, songs: songs}
 	}
 }
 

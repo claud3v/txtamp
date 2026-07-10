@@ -32,6 +32,20 @@ type Playlist struct {
 	Duration  int
 }
 
+type Artist struct {
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+	AlbumCount int    `json:"albumCount"`
+}
+
+type Album struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Artist    string `json:"artist"`
+	SongCount int    `json:"songCount"`
+	Duration  int    `json:"duration"`
+}
+
 type Song struct {
 	ID       string
 	Title    string
@@ -85,6 +99,56 @@ func (c Client) GetPlaylist(ctx context.Context, id string) ([]Song, error) {
 	}
 
 	return response.Response.Playlist.Entry, nil
+}
+
+func (c Client) ListArtists(ctx context.Context) ([]Artist, error) {
+	var response artistsResponse
+	if err := c.get(ctx, "getArtists.view", nil, &response); err != nil {
+		return nil, err
+	}
+
+	if err := checkStatus(response.Response.Status, response.Response.Error, "list artists"); err != nil {
+		return nil, err
+	}
+
+	var artists []Artist
+	for _, index := range response.Response.Artists.Index {
+		artists = append(artists, index.Artist...)
+	}
+
+	return artists, nil
+}
+
+func (c Client) GetArtistAlbums(ctx context.Context, id string) ([]Album, error) {
+	params := url.Values{}
+	params.Set("id", id)
+
+	var response artistResponse
+	if err := c.get(ctx, "getArtist.view", params, &response); err != nil {
+		return nil, err
+	}
+
+	if err := checkStatus(response.Response.Status, response.Response.Error, "get artist"); err != nil {
+		return nil, err
+	}
+
+	return response.Response.Artist.Album, nil
+}
+
+func (c Client) GetAlbumSongs(ctx context.Context, id string) ([]Song, error) {
+	params := url.Values{}
+	params.Set("id", id)
+
+	var response albumResponse
+	if err := c.get(ctx, "getAlbum.view", params, &response); err != nil {
+		return nil, err
+	}
+
+	if err := checkStatus(response.Response.Status, response.Response.Error, "get album"); err != nil {
+		return nil, err
+	}
+
+	return response.Response.Album.Song, nil
 }
 
 func (c Client) StreamURL(id string) (string, error) {
@@ -204,6 +268,38 @@ type playlistResponse struct {
 		Playlist struct {
 			Entry []Song `json:"entry"`
 		} `json:"playlist"`
+	} `json:"subsonic-response"`
+}
+
+type artistsResponse struct {
+	Response struct {
+		Status  string        `json:"status"`
+		Error   subsonicError `json:"error"`
+		Artists struct {
+			Index []struct {
+				Artist []Artist `json:"artist"`
+			} `json:"index"`
+		} `json:"artists"`
+	} `json:"subsonic-response"`
+}
+
+type artistResponse struct {
+	Response struct {
+		Status string        `json:"status"`
+		Error  subsonicError `json:"error"`
+		Artist struct {
+			Album []Album `json:"album"`
+		} `json:"artist"`
+	} `json:"subsonic-response"`
+}
+
+type albumResponse struct {
+	Response struct {
+		Status string        `json:"status"`
+		Error  subsonicError `json:"error"`
+		Album  struct {
+			Song []Song `json:"song"`
+		} `json:"album"`
 	} `json:"subsonic-response"`
 }
 

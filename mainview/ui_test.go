@@ -282,6 +282,195 @@ func TestPlaylistsLoadedLoadsFirstPlaylist(t *testing.T) {
 	}
 }
 
+func TestSwitchToBandsLoadsArtists(t *testing.T) {
+	m := loadedModel()
+
+	updated, cmd := m.Update(tea.KeyPressMsg{Code: '1', Text: "1"})
+	m = updated.(Model)
+
+	if m.mode != bandsMode {
+		t.Fatalf("expected bands mode, got %v", m.mode)
+	}
+	if m.focused != playlistsPane {
+		t.Fatalf("expected sidebar focus, got %v", m.focused)
+	}
+	if cmd == nil {
+		t.Fatal("expected artist load command")
+	}
+}
+
+func TestDropdownOpensModeDialog(t *testing.T) {
+	m := loadedModel()
+	m.focused = modeSelectorPane
+
+	updated, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = updated.(Model)
+
+	if cmd != nil {
+		t.Fatal("expected no command when opening mode dialog")
+	}
+	if !m.modeDialogOpen {
+		t.Fatal("expected mode dialog to open")
+	}
+	if m.selectedMode != playlistsMode {
+		t.Fatalf("expected current mode to be selected, got %v", m.selectedMode)
+	}
+}
+
+func TestModeDialogAppliesSelectedMode(t *testing.T) {
+	m := loadedModel()
+	m.focused = modeSelectorPane
+	m.modeDialogOpen = true
+	m.selectedMode = playlistsMode
+
+	updated, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyUp})
+	m = updated.(Model)
+
+	if m.selectedMode != bandsMode {
+		t.Fatalf("expected bands to be selected, got %v", m.selectedMode)
+	}
+
+	updated, cmd = m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = updated.(Model)
+
+	if m.modeDialogOpen {
+		t.Fatal("expected mode dialog to close")
+	}
+	if m.mode != bandsMode {
+		t.Fatalf("expected bands mode, got %v", m.mode)
+	}
+	if cmd == nil {
+		t.Fatal("expected artist load command")
+	}
+}
+
+func TestModeDialogViewShowsPicker(t *testing.T) {
+	m := loadedModel()
+	m.width = 100
+	m.height = 30
+	m.modeDialogOpen = true
+	m.selectedMode = bandsMode
+
+	view := m.View()
+	if !strings.Contains(view.Content, "Bands") || !strings.Contains(view.Content, "Playlists") {
+		t.Fatalf("expected mode picker options, got:\n%s", view.Content)
+	}
+	if !strings.Contains(view.Content, "Dream On") {
+		t.Fatalf("expected dialog to overlay the existing view, got:\n%s", view.Content)
+	}
+}
+
+func TestUpFromFirstSidebarItemFocusesDropdown(t *testing.T) {
+	m := loadedModel()
+	m.focused = playlistsPane
+	m.selectedPlaylist = 0
+
+	updated, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyUp})
+	m = updated.(Model)
+
+	if cmd != nil {
+		t.Fatal("expected no command when moving focus to dropdown")
+	}
+	if m.focused != modeSelectorPane {
+		t.Fatalf("expected mode selector focus, got %v", m.focused)
+	}
+}
+
+func TestSwitchToPlaylistsLoadsSelectedPlaylist(t *testing.T) {
+	m := loadedModel()
+	m.mode = bandsMode
+	m.artists = []navidrome.Artist{{ID: "artist-1", Name: "Aerosmith"}}
+
+	updated, cmd := m.Update(tea.KeyPressMsg{Code: '2', Text: "2"})
+	m = updated.(Model)
+
+	if m.mode != playlistsMode {
+		t.Fatalf("expected playlists mode, got %v", m.mode)
+	}
+	if cmd == nil {
+		t.Fatal("expected playlist load command")
+	}
+}
+
+func TestArtistsLoadedLoadsFirstArtist(t *testing.T) {
+	m := New("home", navidrome.Client{})
+	m.mode = bandsMode
+
+	updated, cmd := m.Update(artistsLoadedMsg{
+		artists: []navidrome.Artist{
+			{ID: "artist-1", Name: "Aerosmith"},
+		},
+	})
+	m = updated.(Model)
+
+	if len(m.artists) != 1 {
+		t.Fatalf("expected artists to be stored, got %d", len(m.artists))
+	}
+	if m.selectedArtist != 0 {
+		t.Fatalf("expected first artist to be selected, got %d", m.selectedArtist)
+	}
+	if cmd == nil {
+		t.Fatal("expected first artist load command")
+	}
+}
+
+func TestStalePlaylistLoadDoesNotOverwriteBandsMode(t *testing.T) {
+	m := New("home", navidrome.Client{})
+	m.mode = bandsMode
+	m.loading = true
+
+	updated, cmd := m.Update(playlistsLoadedMsg{
+		playlists: []navidrome.Playlist{
+			{ID: "playlist-1", Name: "Favorites"},
+		},
+	})
+	m = updated.(Model)
+
+	if cmd != nil {
+		t.Fatal("expected stale playlist load not to trigger a song load")
+	}
+	if m.mode != bandsMode {
+		t.Fatalf("expected bands mode, got %v", m.mode)
+	}
+	if !m.loading {
+		t.Fatal("expected current bands load state to be preserved")
+	}
+	if len(m.playlists) != 1 {
+		t.Fatalf("expected playlists to be cached, got %d", len(m.playlists))
+	}
+}
+
+func TestBandMainAreaRendersAlbumGroups(t *testing.T) {
+	m := loadedModel()
+	m.mode = bandsMode
+	m.artists = []navidrome.Artist{{ID: "artist-1", Name: "Aerosmith"}}
+	m.albums = []albumGroup{
+		{
+			album: navidrome.Album{ID: "album-1", Name: "Aerosmith"},
+			songs: []navidrome.Song{
+				{ID: "song-1", Title: "Dream On", Duration: 268},
+			},
+		},
+		{
+			album: navidrome.Album{ID: "album-2", Name: "Toys in the Attic"},
+			songs: []navidrome.Song{
+				{ID: "song-2", Title: "Sweet Emotion", Duration: 274},
+			},
+		},
+	}
+	m.songs = []navidrome.Song{
+		{ID: "song-1", Title: "Dream On", Duration: 268},
+		{ID: "song-2", Title: "Sweet Emotion", Duration: 274},
+	}
+
+	content := m.renderMainArea(80, 12)
+	for _, expected := range []string{"> Aerosmith", "Dream On", "> Toys in the Attic", "Sweet Emotion"} {
+		if !strings.Contains(content, expected) {
+			t.Fatalf("expected %q in band view, got:\n%s", expected, content)
+		}
+	}
+}
+
 func TestViewFitsTerminalHeight(t *testing.T) {
 	m := loadedModel()
 	for i := range 100 {
