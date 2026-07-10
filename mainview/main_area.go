@@ -26,16 +26,23 @@ func (m Model) renderSongs(width, height int) string {
 		lines = append(lines, ui.Subtitle.Render("No playlists found"))
 	}
 
-	for i, song := range m.songs {
+	start, end := visibleRange(m.selectedSong, len(m.songs), visibleSongRows(height))
+	for i := start; i < end; i++ {
+		song := m.songs[i]
 		titleWidth := max(width-18, 10)
 		title := ui.Truncate(song.Title, titleWidth)
 		line := fmt.Sprintf("%-*"+"s %5s", titleWidth, title, formatDuration(song.Duration))
-		line = selectableLine(line, i == m.selectedSong, m.focused == songsPane, width-4)
+		line = songLine(line, i, m, width-4)
 		lines = append(lines, line)
 	}
 
 	return ui.MainPane.
 		Width(width).
 		Height(height).
+		MaxHeight(height).
 		Render(strings.Join(lines, "\n"))
+}
+
+func visibleSongRows(height int) int {
+	return max(height-5, 1)
 }

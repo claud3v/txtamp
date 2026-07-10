@@ -84,4 +84,9 @@ var (
 	SelectedRowFocused = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("#282A36")).
 				Background(lipgloss.Color("#8BE9FD"))
+
+	// Currently playing row.
+	PlayingRow = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("#50FA7B"))
 )

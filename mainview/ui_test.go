@@ -1,11 +1,13 @@
 package mainview
 
 import (
+	"strings"
 	"testing"
 	"txtamp/navidrome"
 	"txtamp/player"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/lipgloss"
 )
 
 func TestPlaylistSelectionResetsSongSelection(t *testing.T) {
@@ -61,7 +63,7 @@ func TestPlaybackMessageUpdatesCurrentSong(t *testing.T) {
 	m := loadedModel()
 	song := m.songs[0]
 
-	updated, cmd := m.Update(playbackMsg{song: &song})
+	updated, cmd := m.Update(playbackMsg{song: &song, playbackID: 1})
 	m = updated.(Model)
 
 	if m.currentSong == nil {
@@ -75,6 +77,9 @@ func TestPlaybackMessageUpdatesCurrentSong(t *testing.T) {
 	}
 	if m.duration != song.Duration {
 		t.Fatalf("expected duration %d, got %d", song.Duration, m.duration)
+	}
+	if m.playbackID != 1 {
+		t.Fatalf("expected playback ID 1, got %d", m.playbackID)
 	}
 	if cmd == nil {
 		t.Fatal("expected status polling command")
@@ -100,8 +105,10 @@ func TestSpaceReturnsPauseCommand(t *testing.T) {
 func TestPlayerStatusMessageUpdatesProgress(t *testing.T) {
 	m := loadedModel()
 	m.currentSong = &m.songs[0]
+	m.playbackID = 1
 
 	updated, cmd := m.Update(playerStatusMsg{
+		playbackID: 1,
 		status: player.Status{
 			Elapsed:  42,
 			Duration: 268,
@@ -124,6 +131,102 @@ func TestPlayerStatusMessageUpdatesProgress(t *testing.T) {
 	}
 }
 
+func TestFinishedStatusPlaysNextSong(t *testing.T) {
+	m := loadedModel()
+	m.currentSong = &m.songs[0]
+	m.currentSongIndex = 0
+	m.playbackID = 1
+
+	updated, cmd := m.Update(playerStatusMsg{
+		playbackID: 1,
+		status: player.Status{
+			Elapsed:  267,
+			Duration: 268,
+		},
+	})
+	m = updated.(Model)
+
+	if cmd == nil {
+		t.Fatal("expected next song play command")
+	}
+	if m.selectedSong != 1 {
+		t.Fatalf("expected second song to be selected, got %d", m.selectedSong)
+	}
+}
+
+func TestStaleFinishedStatusIsIgnored(t *testing.T) {
+	m := loadedModel()
+	m.currentSong = &m.songs[1]
+	m.currentSongIndex = 1
+	m.selectedSong = 1
+	m.playbackID = 2
+
+	updated, cmd := m.Update(playerStatusMsg{
+		playbackID: 1,
+		err:        player.ErrNotRunning,
+	})
+	m = updated.(Model)
+
+	if cmd != nil {
+		t.Fatal("expected stale status to be ignored")
+	}
+	if m.selectedSong != 1 {
+		t.Fatalf("expected selected song to stay at 1, got %d", m.selectedSong)
+	}
+}
+
+func TestNextKeyPlaysNextSong(t *testing.T) {
+	m := loadedModel()
+	m.currentSong = &m.songs[0]
+	m.currentSongIndex = 0
+
+	updated, cmd := m.Update(tea.KeyPressMsg{Code: 'n', Text: "n"})
+	m = updated.(Model)
+
+	if cmd == nil {
+		t.Fatal("expected next song play command")
+	}
+	if m.selectedSong != 1 {
+		t.Fatalf("expected second song to be selected, got %d", m.selectedSong)
+	}
+}
+
+func TestPreviousKeyRestartsCurrentSong(t *testing.T) {
+	m := loadedModel()
+	m.currentSong = &m.songs[1]
+	m.currentSongIndex = 1
+	m.selectedSong = 1
+	m.elapsed = 10
+
+	updated, cmd := m.Update(tea.KeyPressMsg{Code: 'p', Text: "p"})
+	m = updated.(Model)
+
+	if cmd == nil {
+		t.Fatal("expected seek command")
+	}
+	if m.selectedSong != 1 {
+		t.Fatalf("expected selection to stay unchanged, got %d", m.selectedSong)
+	}
+}
+
+func TestPreviousKeyQuickPressPlaysPreviousSong(t *testing.T) {
+	m := loadedModel()
+	m.currentSong = &m.songs[1]
+	m.currentSongIndex = 1
+	m.selectedSong = 1
+	m.elapsed = 1
+
+	updated, cmd := m.Update(tea.KeyPressMsg{Code: 'p', Text: "p"})
+	m = updated.(Model)
+
+	if cmd == nil {
+		t.Fatal("expected previous song play command")
+	}
+	if m.selectedSong != 0 {
+		t.Fatalf("expected first song to be selected, got %d", m.selectedSong)
+	}
+}
+
 func TestPlaylistsLoadedLoadsFirstPlaylist(t *testing.T) {
 	m := New("home", navidrome.Client{})
 
@@ -142,6 +245,83 @@ func TestPlaylistsLoadedLoadsFirstPlaylist(t *testing.T) {
 	}
 	if cmd == nil {
 		t.Fatal("expected first playlist load command")
+	}
+}
+
+func TestViewFitsTerminalHeight(t *testing.T) {
+	m := loadedModel()
+	for i := range 100 {
+		m.songs = append(m.songs, navidrome.Song{
+			ID:       "extra",
+			Title:    "Extra Song",
+			Artist:   "Artist",
+			Duration: 180 + i,
+		})
+	}
+	m.width = 120
+	m.height = 30
+
+	view := m.View()
+	if got := lipgloss.Height(view.Content); got > m.height {
+		t.Fatalf("expected view height <= %d, got %d", m.height, got)
+	}
+}
+
+func TestViewFillsTerminalHeightWithShortSongList(t *testing.T) {
+	m := loadedModel()
+	m.width = 120
+	m.height = 30
+
+	view := m.View()
+	if got := lipgloss.Height(view.Content); got != m.height {
+		t.Fatalf("expected view height %d, got %d", m.height, got)
+	}
+}
+
+func TestSongListScrollsToSelectedSong(t *testing.T) {
+	m := loadedModel()
+	m.songs = nil
+	for i := range 20 {
+		m.songs = append(m.songs, navidrome.Song{
+			ID:       "song",
+			Title:    "Song " + string(rune('A'+i)),
+			Artist:   "Artist",
+			Duration: 180,
+		})
+	}
+	m.selectedSong = 15
+
+	content := m.renderSongs(80, 10)
+	if !strings.Contains(content, "Song P") {
+		t.Fatalf("expected selected song to be visible, got:\n%s", content)
+	}
+	if strings.Contains(content, "Song A") {
+		t.Fatalf("expected top songs to scroll out, got:\n%s", content)
+	}
+}
+
+func TestPlayingSongIsMarked(t *testing.T) {
+	m := loadedModel()
+	m.currentSong = &m.songs[1]
+	m.currentSongIndex = 1
+	m.selectedSong = 0
+
+	content := m.renderSongs(80, 12)
+	if !strings.Contains(content, "* Sweet Emotion") {
+		t.Fatalf("expected playing song to be marked, got:\n%s", content)
+	}
+}
+
+func TestSameIndexDifferentSongIsNotMarkedPlaying(t *testing.T) {
+	m := loadedModel()
+	playingSong := navidrome.Song{ID: "other-playlist-song", Title: "Other Playlist Song"}
+	m.currentSong = &playingSong
+	m.currentSongIndex = 1
+	m.selectedSong = 0
+
+	content := m.renderSongs(80, 12)
+	if strings.Contains(content, "* Sweet Emotion") {
+		t.Fatalf("expected same index different song not to be marked, got:\n%s", content)
 	}
 }
 

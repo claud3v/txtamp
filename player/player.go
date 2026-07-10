@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sync"
 	"time"
 )
 
@@ -18,9 +19,12 @@ const (
 	ipcRetryPeriod = 50 * time.Millisecond
 )
 
+var ErrNotRunning = errors.New("mpv is not running")
+
 type Player struct {
 	cmd        *exec.Cmd
 	socketPath string
+	mu         sync.Mutex
 }
 
 type Status struct {
@@ -57,19 +61,39 @@ func (p *Player) Play(url string) error {
 		return fmt.Errorf("starting mpv: %w", err)
 	}
 
+	p.mu.Lock()
 	p.cmd = cmd
+	p.mu.Unlock()
 
 	go func() {
 		cmd.Wait()
 		os.Remove(p.socketPath)
+		p.mu.Lock()
+		if p.cmd == cmd {
+			p.cmd = nil
+		}
+		p.mu.Unlock()
 	}()
 
 	return nil
 }
 
 func (p *Player) TogglePause() error {
-	_, err := p.send("cycle", "pause")
-	return err
+	response, err := p.send("cycle", "pause")
+	if err != nil {
+		return err
+	}
+
+	return checkResponse(response)
+}
+
+func (p *Player) SeekStart() error {
+	response, err := p.send("seek", 0, "absolute")
+	if err != nil {
+		return err
+	}
+
+	return checkResponse(response)
 }
 
 func (p *Player) Status() (Status, error) {
@@ -96,22 +120,33 @@ func (p *Player) Status() (Status, error) {
 }
 
 func (p *Player) Stop() error {
-	if p.cmd == nil || p.cmd.Process == nil {
+	p.mu.Lock()
+	cmd := p.cmd
+	p.cmd = nil
+	p.mu.Unlock()
+
+	if cmd == nil || cmd.Process == nil {
 		return nil
 	}
 
-	if err := p.cmd.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
+	if err := cmd.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
 		return fmt.Errorf("stopping mpv: %w", err)
 	}
-
-	p.cmd = nil
 
 	return nil
 }
 
 func (p *Player) send(command ...any) (mpvResponse, error) {
+	if !p.running() {
+		return mpvResponse{}, ErrNotRunning
+	}
+
 	conn, err := p.dial()
 	if err != nil {
+		if !p.running() {
+			return mpvResponse{}, ErrNotRunning
+		}
+
 		return mpvResponse{}, fmt.Errorf("connecting to mpv: %w", err)
 	}
 	defer conn.Close()
@@ -131,11 +166,14 @@ func (p *Player) send(command ...any) (mpvResponse, error) {
 		return mpvResponse{}, fmt.Errorf("reading mpv response: %w", err)
 	}
 
-	if response.Error != "success" {
-		return mpvResponse{}, fmt.Errorf("mpv command failed: %s", response.Error)
-	}
-
 	return response, nil
+}
+
+func (p *Player) running() bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	return p.cmd != nil && p.cmd.Process != nil
 }
 
 func (p *Player) dial() (net.Conn, error) {
@@ -160,6 +198,12 @@ func (p *Player) getNumberProperty(name string) (float64, error) {
 	if err != nil {
 		return 0, err
 	}
+	if response.Error == "property unavailable" {
+		return 0, nil
+	}
+	if err := checkResponse(response); err != nil {
+		return 0, err
+	}
 
 	value, ok := response.Data.(float64)
 	if !ok {
@@ -174,6 +218,12 @@ func (p *Player) getBoolProperty(name string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	if response.Error == "property unavailable" {
+		return false, nil
+	}
+	if err := checkResponse(response); err != nil {
+		return false, err
+	}
 
 	value, ok := response.Data.(bool)
 	if !ok {
@@ -186,4 +236,12 @@ func (p *Player) getBoolProperty(name string) (bool, error) {
 type mpvResponse struct {
 	Data  any    `json:"data"`
 	Error string `json:"error"`
+}
+
+func checkResponse(response mpvResponse) error {
+	if response.Error == "success" {
+		return nil
+	}
+
+	return fmt.Errorf("mpv command failed: %s", response.Error)
 }

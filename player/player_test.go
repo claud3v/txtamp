@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 )
@@ -51,6 +52,7 @@ func TestSendWritesCommandToSocket(t *testing.T) {
 	}()
 
 	p := &Player{socketPath: socketPath}
+	startFakeProcess(t, p)
 	if err := p.TogglePause(); err != nil {
 		t.Fatalf("expected toggle pause to send command, got %v", err)
 	}
@@ -75,6 +77,7 @@ func TestStatusReadsProperties(t *testing.T) {
 	go serveStatusProperties(t, listener)
 
 	p := &Player{socketPath: socketPath}
+	startFakeProcess(t, p)
 	status, err := p.Status()
 	if err != nil {
 		t.Fatalf("expected status, got %v", err)
@@ -91,6 +94,49 @@ func TestStatusReadsProperties(t *testing.T) {
 	}
 }
 
+func TestSendReturnsNotRunningWhenPlayerIsStopped(t *testing.T) {
+	p := New()
+
+	err := p.TogglePause()
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if err != ErrNotRunning {
+		t.Fatalf("expected ErrNotRunning, got %v", err)
+	}
+}
+
+func TestStatusToleratesUnavailableNumericProperties(t *testing.T) {
+	socketPath := filepath.Join(os.TempDir(), "txtamp-test-unavailable.sock")
+	os.Remove(socketPath)
+	t.Cleanup(func() {
+		os.Remove(socketPath)
+	})
+
+	listener, err := net.Listen("unix", socketPath)
+	if err != nil {
+		t.Fatalf("expected listener, got %v", err)
+	}
+	defer listener.Close()
+
+	go serveUnavailableDuration(t, listener)
+
+	p := &Player{socketPath: socketPath}
+	startFakeProcess(t, p)
+
+	status, err := p.Status()
+	if err != nil {
+		t.Fatalf("expected status to tolerate unavailable property, got %v", err)
+	}
+
+	if status.Elapsed != 12 {
+		t.Fatalf("expected elapsed 12, got %d", status.Elapsed)
+	}
+	if status.Duration != 0 {
+		t.Fatalf("expected unknown duration 0, got %d", status.Duration)
+	}
+}
+
 func TestNewUsesTempSocketPath(t *testing.T) {
 	p := New()
 
@@ -100,6 +146,54 @@ func TestNewUsesTempSocketPath(t *testing.T) {
 	if filepath.Base(p.socketPath) == "" {
 		t.Fatalf("expected socket filename, got %q", p.socketPath)
 	}
+}
+
+func serveUnavailableDuration(t *testing.T, listener net.Listener) {
+	t.Helper()
+
+	responses := map[string]map[string]any{
+		"time-pos": {"data": 12.0, "error": "success"},
+		"duration": {"error": "property unavailable"},
+		"pause":    {"data": false, "error": "success"},
+	}
+
+	for range 3 {
+		conn, err := listener.Accept()
+		if err != nil {
+			return
+		}
+
+		var message struct {
+			Command []any `json:"command"`
+		}
+		if err := json.NewDecoder(bufio.NewReader(conn)).Decode(&message); err != nil {
+			conn.Close()
+			return
+		}
+
+		property, _ := message.Command[1].(string)
+		if err := json.NewEncoder(conn).Encode(responses[property]); err != nil {
+			conn.Close()
+			return
+		}
+
+		conn.Close()
+	}
+}
+
+func startFakeProcess(t *testing.T, p *Player) {
+	t.Helper()
+
+	cmd := exec.Command("sleep", "5")
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("expected fake process to start, got %v", err)
+	}
+	t.Cleanup(func() {
+		cmd.Process.Kill()
+		cmd.Wait()
+	})
+
+	p.cmd = cmd
 }
 
 func serveStatusProperties(t *testing.T, listener net.Listener) {

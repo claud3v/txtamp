@@ -2,6 +2,7 @@ package mainview
 
 import (
 	"context"
+	"errors"
 	"time"
 	"txtamp/navidrome"
 	"txtamp/player"
@@ -14,6 +15,7 @@ import (
 const (
 	loadTimeout  = 10 * time.Second
 	statusPeriod = 1 * time.Second
+	restartLimit = 3
 )
 
 type focusPane int
@@ -37,6 +39,8 @@ type Model struct {
 	paused           bool
 	elapsed          int
 	duration         int
+	currentSongIndex int
+	playbackID       int
 	loading          bool
 	err              error
 
@@ -55,17 +59,26 @@ type songsLoadedMsg struct {
 }
 
 type playbackMsg struct {
-	song   *navidrome.Song
-	paused bool
-	err    error
+	song       *navidrome.Song
+	songIndex  int
+	playbackID int
+	paused     bool
+	err        error
+}
+
+type seekMsg struct {
+	err error
 }
 
 type playerStatusMsg struct {
-	status player.Status
-	err    error
+	playbackID int
+	status     player.Status
+	err        error
 }
 
-type playerTickMsg time.Time
+type playerTickMsg struct {
+	playbackID int
+}
 
 func New(connectedTo string, client navidrome.Client) Model {
 	return Model{
@@ -112,28 +125,48 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if msg.song != nil {
 			m.currentSong = msg.song
+			m.currentSongIndex = msg.songIndex
+			m.playbackID = msg.playbackID
 			m.elapsed = 0
 			m.duration = msg.song.Duration
 		}
 		m.paused = msg.paused
-		return m, tea.Batch(m.pollPlayerStatus(), tickPlayerStatus())
+		return m, tea.Batch(m.pollPlayerStatus(), tickPlayerStatus(m.playbackID))
+	case seekMsg:
+		m.err = msg.err
+		if msg.err == nil {
+			m.elapsed = 0
+		}
 	case playerTickMsg:
-		if m.currentSong == nil {
+		if m.currentSong == nil || msg.playbackID != m.playbackID {
 			return m, nil
 		}
 
 		return m, m.pollPlayerStatus()
 	case playerStatusMsg:
+		if msg.playbackID != m.playbackID {
+			return m, nil
+		}
+
 		if msg.err != nil {
+			if errors.Is(msg.err, player.ErrNotRunning) {
+				cmd := m.playNextSong()
+				return m, cmd
+			}
+
 			m.err = msg.err
-			return m, tickPlayerStatus()
+			return m, tickPlayerStatus(m.playbackID)
 		}
 
 		m.elapsed = msg.status.Elapsed
 		m.duration = msg.status.Duration
 		m.paused = msg.status.Paused
+		if m.playbackFinished() {
+			cmd := m.playNextSong()
+			return m, cmd
+		}
 		if m.currentSong != nil {
-			return m, tickPlayerStatus()
+			return m, tickPlayerStatus(m.playbackID)
 		}
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -155,6 +188,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		case " ", "space":
 			cmd := m.togglePlayPause()
+			return m, cmd
+		case "n":
+			cmd := m.playNextSong()
+			return m, cmd
+		case "p":
+			cmd := m.playPreviousSong()
 			return m, cmd
 		}
 	}
@@ -213,8 +252,7 @@ func (m *Model) activateSelection() tea.Cmd {
 		return nil
 	}
 
-	song := m.songs[m.selectedSong]
-	return m.playSong(song)
+	return m.playSongAt(m.selectedSong)
 }
 
 func (m *Model) togglePlayPause() tea.Cmd {
@@ -264,8 +302,25 @@ func (m *Model) loadSelectedPlaylist() tea.Cmd {
 }
 
 func (m *Model) playSong(song navidrome.Song) tea.Cmd {
+	return m.playSongAtIndex(song, m.selectedSong)
+}
+
+func (m *Model) playSongAt(index int) tea.Cmd {
+	if len(m.songs) == 0 {
+		return nil
+	}
+
+	index = clamp(index, 0, len(m.songs)-1)
+	m.selectedSong = index
+
+	return m.playSongAtIndex(m.songs[index], index)
+}
+
+func (m *Model) playSongAtIndex(song navidrome.Song, index int) tea.Cmd {
 	client := m.client
 	player := m.player
+	playbackID := m.playbackID + 1
+	m.playbackID = playbackID
 
 	return func() tea.Msg {
 		streamURL, err := client.StreamURL(song.ID)
@@ -278,24 +333,69 @@ func (m *Model) playSong(song navidrome.Song) tea.Cmd {
 		}
 
 		return playbackMsg{
-			song:   &song,
-			paused: false,
+			song:       &song,
+			songIndex:  index,
+			playbackID: playbackID,
+			paused:     false,
 		}
 	}
 }
 
-func (m *Model) pollPlayerStatus() tea.Cmd {
+func (m *Model) playNextSong() tea.Cmd {
+	if len(m.songs) == 0 {
+		return nil
+	}
+
+	nextIndex := m.currentSongIndex + 1
+	if nextIndex >= len(m.songs) {
+		m.currentSong = nil
+		m.elapsed = 0
+		m.duration = 0
+		m.paused = false
+		m.player.Stop()
+		return nil
+	}
+
+	return m.playSongAt(nextIndex)
+}
+
+func (m *Model) playPreviousSong() tea.Cmd {
+	if m.currentSong == nil {
+		return nil
+	}
+
+	if m.elapsed > restartLimit || m.currentSongIndex == 0 {
+		return m.seekStart()
+	}
+
+	return m.playSongAt(m.currentSongIndex - 1)
+}
+
+func (m *Model) seekStart() tea.Cmd {
 	player := m.player
 
 	return func() tea.Msg {
-		status, err := player.Status()
-		return playerStatusMsg{status: status, err: err}
+		return seekMsg{err: player.SeekStart()}
 	}
 }
 
-func tickPlayerStatus() tea.Cmd {
+func (m Model) playbackFinished() bool {
+	return m.duration > 0 && m.elapsed >= m.duration-1 && !m.paused
+}
+
+func (m *Model) pollPlayerStatus() tea.Cmd {
+	player := m.player
+	playbackID := m.playbackID
+
+	return func() tea.Msg {
+		status, err := player.Status()
+		return playerStatusMsg{playbackID: playbackID, status: status, err: err}
+	}
+}
+
+func tickPlayerStatus(playbackID int) tea.Cmd {
 	return tea.Tick(statusPeriod, func(t time.Time) tea.Msg {
-		return playerTickMsg(t)
+		return playerTickMsg{playbackID: playbackID}
 	})
 }
 
