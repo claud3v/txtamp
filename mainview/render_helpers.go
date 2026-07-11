@@ -33,6 +33,15 @@ func searchLine(query string) string {
 	return ui.Subtitle.Render("Filter: " + query + cursor)
 }
 
+func globalSearchLine(query string) string {
+	cursor := ""
+	if query == "" {
+		cursor = "_"
+	}
+
+	return ui.Subtitle.Render("Search: " + query + cursor)
+}
+
 func songLine(text string, index int, m Model, width int) string {
 	selected := index == m.selectedSong
 	playing := m.currentSong != nil && index < len(m.songs) && m.songs[index].ID == m.currentSong.ID

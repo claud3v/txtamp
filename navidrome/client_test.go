@@ -281,6 +281,65 @@ func TestGetAlbumSongs(t *testing.T) {
 	}
 }
 
+func TestSearch(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/rest/search3.view" {
+			t.Fatalf("expected /rest/search3.view, got %q", r.URL.Path)
+		}
+		if r.URL.Query().Get("query") != "victory" {
+			t.Fatalf("expected search query, got %q", r.URL.Query().Get("query"))
+		}
+		if r.URL.Query().Get("artistCount") != "20" {
+			t.Fatalf("expected artist count, got %q", r.URL.Query().Get("artistCount"))
+		}
+		if r.URL.Query().Get("albumCount") != "20" {
+			t.Fatalf("expected album count, got %q", r.URL.Query().Get("albumCount"))
+		}
+		if r.URL.Query().Get("songCount") != "50" {
+			t.Fatalf("expected song count, got %q", r.URL.Query().Get("songCount"))
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{
+			"subsonic-response": {
+				"status": "ok",
+				"searchResult3": {
+					"artist": [
+						{"id": "artist-1", "name": "Victory", "albumCount": 2}
+					],
+					"album": [
+						{"id": "album-1", "name": "Victory Songs", "artist": "Various Artists", "songCount": 10, "duration": 2500}
+					],
+					"song": [
+						{"id": "song-1", "title": "Victory", "artist": "H.E.A.T", "album": "Force Majeure", "track": 4, "duration": 240}
+					]
+				}
+			}
+		}`))
+	}))
+	defer server.Close()
+
+	client := Client{
+		BaseURL:  server.URL,
+		Username: "john",
+		Password: "secret",
+	}
+
+	result, err := client.Search(context.Background(), "victory")
+	if err != nil {
+		t.Fatalf("expected search to load, got %v", err)
+	}
+	if len(result.Artists) != 1 || result.Artists[0].Name != "Victory" {
+		t.Fatalf("unexpected artists: %+v", result.Artists)
+	}
+	if len(result.Albums) != 1 || result.Albums[0].Name != "Victory Songs" {
+		t.Fatalf("unexpected albums: %+v", result.Albums)
+	}
+	if len(result.Songs) != 1 || result.Songs[0].Title != "Victory" {
+		t.Fatalf("unexpected songs: %+v", result.Songs)
+	}
+}
+
 func TestStreamURL(t *testing.T) {
 	client := Client{
 		BaseURL:  "https://music.example.com",

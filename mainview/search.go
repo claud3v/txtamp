@@ -1,6 +1,7 @@
 package mainview
 
 import (
+	"context"
 	"strings"
 	"txtamp/navidrome"
 
@@ -22,6 +23,21 @@ type indexedSong struct {
 	song  navidrome.Song
 }
 
+type globalSearchResultKind int
+
+const (
+	searchArtistResult globalSearchResultKind = iota
+	searchAlbumResult
+	searchSongResult
+)
+
+type globalSearchRow struct {
+	kind   globalSearchResultKind
+	artist navidrome.Artist
+	album  navidrome.Album
+	song   navidrome.Song
+}
+
 func (m *Model) startSearch() {
 	if m.focused == modeSelectorPane {
 		return
@@ -34,9 +50,122 @@ func (m *Model) startSearch() {
 	m.searchPane = m.focused
 }
 
+func (m *Model) startGlobalSearch() {
+	m.contentMode = globalSearchContent
+	m.focused = songsPane
+	m.globalSearching = true
+	m.globalSearchQuery = ""
+	m.globalSearchSubmittedQuery = ""
+	m.globalSearchErr = nil
+	m.globalSearchResult = navidrome.SearchResult{}
+	m.selectedSearchResult = 0
+}
+
 func (m *Model) clearSearch() {
 	m.searching = false
 	m.searchQuery = ""
+}
+
+func (m *Model) handleGlobalSearchKey(msg tea.KeyMsg) tea.Cmd {
+	action, ok := actionForKey(msg.String())
+	if ok {
+		switch action {
+		case actionQuit:
+			m.player.Stop()
+			return tea.Quit
+		case actionCloseDialog:
+			m.globalSearching = false
+			if strings.TrimSpace(m.globalSearchQuery) == "" && m.globalSearchResultCount() == 0 {
+				m.contentMode = libraryContent
+			}
+			return nil
+		case actionActivate:
+			m.globalSearching = false
+			return m.runGlobalSearch()
+		}
+	}
+
+	switch msg.String() {
+	case "backspace":
+		m.globalSearchQuery = dropLastRune(m.globalSearchQuery)
+	case "space":
+		m.globalSearchQuery += " "
+	default:
+		if msg.String() == "" || len([]rune(msg.String())) != 1 {
+			return nil
+		}
+
+		m.globalSearchQuery += msg.String()
+	}
+
+	return nil
+}
+
+func (m *Model) runGlobalSearch() tea.Cmd {
+	query := strings.TrimSpace(m.globalSearchQuery)
+	if query == "" {
+		m.globalSearchResult = navidrome.SearchResult{}
+		m.globalSearchErr = nil
+		m.globalSearchLoading = false
+		m.globalSearchSubmittedQuery = ""
+		m.selectedSearchResult = 0
+		return nil
+	}
+
+	m.globalSearchSubmittedQuery = query
+	m.globalSearchLoading = true
+	m.globalSearchErr = nil
+
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), loadTimeout)
+		defer cancel()
+
+		result, err := m.client.Search(ctx, query)
+		return globalSearchLoadedMsg{query: query, result: result, err: err}
+	}
+}
+
+func (m Model) globalSearchRows() []globalSearchRow {
+	result := m.globalSearchResult
+	rows := make([]globalSearchRow, 0, len(result.Artists)+len(result.Albums)+len(result.Songs))
+	for _, artist := range result.Artists {
+		rows = append(rows, globalSearchRow{kind: searchArtistResult, artist: artist})
+	}
+	for _, album := range result.Albums {
+		rows = append(rows, globalSearchRow{kind: searchAlbumResult, album: album})
+	}
+	for _, song := range result.Songs {
+		rows = append(rows, globalSearchRow{kind: searchSongResult, song: song})
+	}
+
+	return rows
+}
+
+func (m Model) globalSearchResultCount() int {
+	return len(m.globalSearchResult.Artists) + len(m.globalSearchResult.Albums) + len(m.globalSearchResult.Songs)
+}
+
+func (m *Model) moveGlobalSearchSelection(delta int) {
+	rows := m.globalSearchRows()
+	if len(rows) == 0 {
+		return
+	}
+
+	m.selectedSearchResult = clamp(m.selectedSearchResult+delta, 0, len(rows)-1)
+}
+
+func (m *Model) activateGlobalSearchResult() tea.Cmd {
+	rows := m.globalSearchRows()
+	if len(rows) == 0 {
+		return nil
+	}
+
+	row := rows[clamp(m.selectedSearchResult, 0, len(rows)-1)]
+	if row.kind != searchSongResult {
+		return nil
+	}
+
+	return m.playSongAtIndex(row.song, -1)
 }
 
 func (m *Model) handleSearchKey(msg tea.KeyMsg) tea.Cmd {

@@ -3,6 +3,8 @@ package mainview
 import (
 	"testing"
 	"txtamp/navidrome"
+
+	tea "charm.land/bubbletea/v2"
 )
 
 func TestFilteredPlaylistsKeepsOriginalIndexes(t *testing.T) {
@@ -119,5 +121,84 @@ func TestDropLastRune(t *testing.T) {
 	}
 	if got := dropLastRune(""); got != "" {
 		t.Fatalf("expected empty string, got %q", got)
+	}
+}
+
+func TestStartGlobalSearch(t *testing.T) {
+	m := loadedModel()
+
+	m.startGlobalSearch()
+
+	if m.contentMode != globalSearchContent {
+		t.Fatalf("expected global search content, got %v", m.contentMode)
+	}
+	if !m.globalSearching {
+		t.Fatal("expected global search input to be active")
+	}
+	if m.focused != songsPane {
+		t.Fatalf("expected main pane focus, got %v", m.focused)
+	}
+}
+
+func TestGlobalSearchInputRunsSearchOnEnter(t *testing.T) {
+	m := loadedModel()
+	m.startGlobalSearch()
+
+	var cmd tea.Cmd
+	for _, char := range "victory" {
+		cmd = m.handleGlobalSearchKey(tea.KeyPressMsg{Code: char, Text: string(char)})
+		if cmd != nil {
+			t.Fatal("expected no command while typing")
+		}
+	}
+
+	cmd = m.handleGlobalSearchKey(tea.KeyPressMsg{Code: tea.KeyEnter})
+	if cmd == nil {
+		t.Fatal("expected search command")
+	}
+	if m.globalSearching {
+		t.Fatal("expected global search input to close")
+	}
+	if !m.globalSearchLoading {
+		t.Fatal("expected global search loading")
+	}
+	if m.globalSearchSubmittedQuery != "victory" {
+		t.Fatalf("expected submitted query victory, got %q", m.globalSearchSubmittedQuery)
+	}
+}
+
+func TestGlobalSearchRowsAreGrouped(t *testing.T) {
+	m := loadedModel()
+	m.contentMode = globalSearchContent
+	m.globalSearchResult = navidrome.SearchResult{
+		Artists: []navidrome.Artist{{ID: "artist-1", Name: "Victory"}},
+		Albums:  []navidrome.Album{{ID: "album-1", Name: "Victory Songs", Artist: "Various Artists"}},
+		Songs:   []navidrome.Song{{ID: "song-1", Title: "Victory", Artist: "H.E.A.T", Album: "Force Majeure", Duration: 240}},
+	}
+
+	rows := m.globalSearchRows()
+	if len(rows) != 3 {
+		t.Fatalf("expected 3 selectable rows, got %d", len(rows))
+	}
+	if rows[0].kind != searchArtistResult || rows[1].kind != searchAlbumResult || rows[2].kind != searchSongResult {
+		t.Fatalf("unexpected result rows: %+v", rows)
+	}
+}
+
+func TestActivateGlobalSearchSongPlaysSongOutsideCurrentList(t *testing.T) {
+	m := loadedModel()
+	m.contentMode = globalSearchContent
+	m.focused = songsPane
+	m.selectedSearchResult = 0
+	m.globalSearchResult = navidrome.SearchResult{
+		Songs: []navidrome.Song{{ID: "search-song", Title: "Victory", Duration: 240}},
+	}
+
+	cmd := m.activateGlobalSearchResult()
+	if cmd == nil {
+		t.Fatal("expected play command")
+	}
+	if m.playbackID != 1 {
+		t.Fatalf("expected playback id to increment, got %d", m.playbackID)
 	}
 }

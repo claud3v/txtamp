@@ -15,6 +15,7 @@ func TestActionForKey(t *testing.T) {
 		{key: "1", expectedAction: actionShowArtists, found: true},
 		{key: "2", expectedAction: actionShowPlaylists, found: true},
 		{key: "/", expectedAction: actionStartSearch, found: true},
+		{key: "s", expectedAction: actionGlobalSearch, found: true},
 		{key: "esc", expectedAction: actionCloseDialog, found: true},
 		{key: "space", expectedAction: actionPlayPause, found: true},
 		{key: "x", found: false},

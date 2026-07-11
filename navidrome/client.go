@@ -55,6 +55,12 @@ type Song struct {
 	Duration int
 }
 
+type SearchResult struct {
+	Artists []Artist `json:"artist"`
+	Albums  []Album  `json:"album"`
+	Songs   []Song   `json:"song"`
+}
+
 func (c Client) Ping(ctx context.Context) error {
 	var response subsonicResponse
 	if err := c.get(ctx, "ping.view", nil, &response); err != nil {
@@ -149,6 +155,25 @@ func (c Client) GetAlbumSongs(ctx context.Context, id string) ([]Song, error) {
 	}
 
 	return response.Response.Album.Song, nil
+}
+
+func (c Client) Search(ctx context.Context, query string) (SearchResult, error) {
+	params := url.Values{}
+	params.Set("query", query)
+	params.Set("artistCount", "20")
+	params.Set("albumCount", "20")
+	params.Set("songCount", "50")
+
+	var response searchResponse
+	if err := c.get(ctx, "search3.view", params, &response); err != nil {
+		return SearchResult{}, err
+	}
+
+	if err := checkStatus(response.Response.Status, response.Response.Error, "search"); err != nil {
+		return SearchResult{}, err
+	}
+
+	return response.Response.SearchResult, nil
 }
 
 func (c Client) StreamURL(id string) (string, error) {
@@ -300,6 +325,14 @@ type albumResponse struct {
 		Album  struct {
 			Song []Song `json:"song"`
 		} `json:"album"`
+	} `json:"subsonic-response"`
+}
+
+type searchResponse struct {
+	Response struct {
+		Status       string        `json:"status"`
+		Error        subsonicError `json:"error"`
+		SearchResult SearchResult  `json:"searchResult3"`
 	} `json:"subsonic-response"`
 }
 

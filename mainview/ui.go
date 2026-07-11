@@ -35,6 +35,13 @@ const (
 	playlistsMode
 )
 
+type mainContentMode int
+
+const (
+	libraryContent mainContentMode = iota
+	globalSearchContent
+)
+
 type albumGroup struct {
 	album navidrome.Album
 	songs []navidrome.Song
@@ -47,26 +54,34 @@ type Model struct {
 	client      navidrome.Client
 	player      *player.Player
 
-	focused          focusPane
-	mode             sidebarMode
-	modeDialogOpen   bool
-	selectedMode     sidebarMode
-	searching        bool
-	searchPane       focusPane
-	searchQuery      string
-	loadedPlaylistID string
-	loadedArtistID   string
-	selectedPlaylist int
-	selectedArtist   int
-	selectedSong     int
-	currentSong      *navidrome.Song
-	paused           bool
-	elapsed          int
-	duration         int
-	currentSongIndex int
-	playbackID       int
-	loading          bool
-	err              error
+	focused                    focusPane
+	mode                       sidebarMode
+	contentMode                mainContentMode
+	modeDialogOpen             bool
+	selectedMode               sidebarMode
+	searching                  bool
+	searchPane                 focusPane
+	searchQuery                string
+	globalSearching            bool
+	globalSearchQuery          string
+	globalSearchSubmittedQuery string
+	globalSearchLoading        bool
+	globalSearchErr            error
+	globalSearchResult         navidrome.SearchResult
+	selectedSearchResult       int
+	loadedPlaylistID           string
+	loadedArtistID             string
+	selectedPlaylist           int
+	selectedArtist             int
+	selectedSong               int
+	currentSong                *navidrome.Song
+	paused                     bool
+	elapsed                    int
+	duration                   int
+	currentSongIndex           int
+	playbackID                 int
+	loading                    bool
+	err                        error
 
 	playlists []navidrome.Playlist
 	artists   []navidrome.Artist
@@ -95,6 +110,12 @@ type artistLoadedMsg struct {
 	albums   []albumGroup
 	songs    []navidrome.Song
 	err      error
+}
+
+type globalSearchLoadedMsg struct {
+	query  string
+	result navidrome.SearchResult
+	err    error
 }
 
 type playbackMsg struct {
@@ -204,6 +225,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.albums = msg.albums
 		m.songs = msg.songs
 		m.selectedSong = 0
+	case globalSearchLoadedMsg:
+		if msg.query != m.globalSearchSubmittedQuery {
+			return m, nil
+		}
+
+		m.globalSearchLoading = false
+		m.globalSearchErr = msg.err
+		m.globalSearchResult = msg.result
+		m.selectedSearchResult = 0
 	case playbackMsg:
 		m.err = msg.err
 		if msg.err != nil {
@@ -255,6 +285,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tickPlayerStatus(m.playbackID)
 		}
 	case tea.KeyMsg:
+		if m.globalSearching {
+			cmd := m.handleGlobalSearchKey(msg)
+			return m, cmd
+		}
+
 		if m.searching {
 			cmd := m.handleSearchKey(msg)
 			return m, cmd
@@ -281,9 +316,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case actionFocusMainArea:
 			m.focused = songsPane
 		case actionCloseDialog:
-			m.clearSearch()
+			if m.contentMode == globalSearchContent {
+				m.contentMode = libraryContent
+				m.globalSearching = false
+			} else {
+				m.clearSearch()
+			}
 		case actionStartSearch:
 			m.startSearch()
+		case actionGlobalSearch:
+			m.startGlobalSearch()
 		case actionMoveUp:
 			cmd := m.moveSelection(-1)
 			return m, cmd
@@ -392,6 +434,11 @@ func modeDialogRow(label, key string, selected bool, width int) string {
 }
 
 func (m *Model) moveSelection(delta int) tea.Cmd {
+	if m.contentMode == globalSearchContent && m.focused == songsPane {
+		m.moveGlobalSearchSelection(delta)
+		return nil
+	}
+
 	switch m.focused {
 	case modeSelectorPane:
 		if delta > 0 {
@@ -422,6 +469,10 @@ func (m *Model) activateSelection() tea.Cmd {
 	if m.focused == modeSelectorPane {
 		m.openModeDialog()
 		return nil
+	}
+
+	if m.contentMode == globalSearchContent && m.focused == songsPane {
+		return m.activateGlobalSearchResult()
 	}
 
 	if m.focused == playlistsPane {
@@ -708,6 +759,9 @@ func (m *Model) playNextSong() tea.Cmd {
 	if len(m.songs) == 0 {
 		return nil
 	}
+	if m.currentSongIndex < 0 {
+		return nil
+	}
 
 	nextIndex := m.currentSongIndex + 1
 	if nextIndex >= len(m.songs) {
@@ -725,6 +779,9 @@ func (m *Model) playNextSong() tea.Cmd {
 func (m *Model) playPreviousSong() tea.Cmd {
 	if m.currentSong == nil {
 		return nil
+	}
+	if m.currentSongIndex < 0 {
+		return m.seekStart()
 	}
 
 	if m.elapsed > restartLimit || m.currentSongIndex == 0 {

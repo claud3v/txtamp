@@ -13,7 +13,16 @@ type artistRow struct {
 	songIndex  int
 }
 
+type renderedSearchRow struct {
+	text        string
+	resultIndex int
+}
+
 func (m Model) renderMainArea(width, height int) string {
+	if m.contentMode == globalSearchContent {
+		return m.renderGlobalSearch(width, height)
+	}
+
 	if m.mode == artistsMode {
 		return m.renderArtists(width, height)
 	}
@@ -65,6 +74,114 @@ func (m Model) renderSongs(width, height int) string {
 		Height(height).
 		MaxHeight(height).
 		Render(strings.Join(lines, "\n"))
+}
+
+func (m Model) renderGlobalSearch(width, height int) string {
+	title := "Search"
+	lines := []string{
+		paneTitle(title, m.focused == songsPane),
+		globalSearchLine(m.globalSearchQuery),
+		"",
+	}
+
+	if m.globalSearchErr != nil {
+		lines = append(lines, ui.Error.Render(m.globalSearchErr.Error()))
+	} else if m.globalSearchLoading {
+		lines = append(lines, ui.Subtitle.Render("Searching..."))
+	} else if m.globalSearching && strings.TrimSpace(m.globalSearchQuery) != "" {
+		lines = append(lines, ui.Subtitle.Render("Press enter to search"))
+	} else if strings.TrimSpace(m.globalSearchQuery) == "" {
+		lines = append(lines, ui.Subtitle.Render("Type a query and press enter"))
+	} else if m.globalSearchSubmittedQuery != "" && m.globalSearchResultCount() == 0 {
+		lines = append(lines, ui.Subtitle.Render("No matches"))
+	}
+
+	rows := m.renderGlobalSearchRows(width - 4)
+	selectedRow := selectedSearchRenderRow(rows, m.selectedSearchResult)
+	start, end := visibleRange(selectedRow, len(rows), m.visibleSongRows(height))
+	for _, row := range rows[start:end] {
+		lines = append(lines, row.text)
+	}
+
+	return ui.MainPane.
+		Width(width).
+		Height(height).
+		MaxHeight(height).
+		Render(strings.Join(lines, "\n"))
+}
+
+func (m Model) renderGlobalSearchRows(width int) []renderedSearchRow {
+	rows := make([]renderedSearchRow, 0, m.globalSearchResultCount()+3)
+	resultIndex := 0
+
+	if len(m.globalSearchResult.Artists) > 0 {
+		rows = append(rows, renderedSearchRow{text: ui.PaneTitle.Render("Artists"), resultIndex: -1})
+		for _, artist := range m.globalSearchResult.Artists {
+			rows = append(rows, renderedSearchRow{
+				text:        selectableLine(artist.Name, resultIndex == m.selectedSearchResult, m.focused == songsPane, width),
+				resultIndex: resultIndex,
+			})
+			resultIndex++
+		}
+	}
+
+	if len(m.globalSearchResult.Albums) > 0 {
+		if len(rows) > 0 {
+			rows = append(rows, renderedSearchRow{text: "", resultIndex: -1})
+		}
+		rows = append(rows, renderedSearchRow{text: ui.PaneTitle.Render("Albums"), resultIndex: -1})
+		for _, album := range m.globalSearchResult.Albums {
+			text := album.Name
+			if album.Artist != "" {
+				text += " - " + album.Artist
+			}
+			rows = append(rows, renderedSearchRow{
+				text:        selectableLine(text, resultIndex == m.selectedSearchResult, m.focused == songsPane, width),
+				resultIndex: resultIndex,
+			})
+			resultIndex++
+		}
+	}
+
+	if len(m.globalSearchResult.Songs) > 0 {
+		if len(rows) > 0 {
+			rows = append(rows, renderedSearchRow{text: "", resultIndex: -1})
+		}
+		rows = append(rows, renderedSearchRow{text: ui.PaneTitle.Render("Songs"), resultIndex: -1})
+		for _, song := range m.globalSearchResult.Songs {
+			titleWidth := max(width-18, 10)
+			title := ui.Truncate(formatSongSearchResult(song), titleWidth)
+			line := fmt.Sprintf("%-*"+"s %5s", titleWidth, title, formatDuration(song.Duration))
+			rows = append(rows, renderedSearchRow{
+				text:        styledLine("  ", line, resultIndex == m.selectedSearchResult, m.focused == songsPane, false, width),
+				resultIndex: resultIndex,
+			})
+			resultIndex++
+		}
+	}
+
+	return rows
+}
+
+func selectedSearchRenderRow(rows []renderedSearchRow, selectedResult int) int {
+	for i, row := range rows {
+		if row.resultIndex == selectedResult {
+			return i
+		}
+	}
+
+	return 0
+}
+
+func formatSongSearchResult(song navidrome.Song) string {
+	if song.Artist != "" && song.Album != "" {
+		return song.Artist + " - " + song.Album + " - " + song.Title
+	}
+	if song.Artist != "" {
+		return song.Artist + " - " + song.Title
+	}
+
+	return song.Title
 }
 
 func (m Model) renderArtists(width, height int) string {

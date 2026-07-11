@@ -680,6 +680,40 @@ func TestArtistSearchKeepsMatchingAlbumGroups(t *testing.T) {
 	}
 }
 
+func TestGlobalSearchMainAreaRendersGroupedResults(t *testing.T) {
+	m := loadedModel()
+	m.contentMode = globalSearchContent
+	m.focused = songsPane
+	m.globalSearchQuery = "victory"
+	m.globalSearchResult = navidrome.SearchResult{
+		Artists: []navidrome.Artist{{ID: "artist-1", Name: "Victory"}},
+		Albums:  []navidrome.Album{{ID: "album-1", Name: "Victory Songs", Artist: "Various Artists"}},
+		Songs:   []navidrome.Song{{ID: "song-1", Title: "Victory", Artist: "H.E.A.T", Album: "Force Majeure", Duration: 240}},
+	}
+
+	content := m.renderMainArea(100, 18)
+	for _, expected := range []string{"Artists", "Victory", "Albums", "Victory Songs", "Songs", "H.E.A.T - Force Majeure - Victory"} {
+		if !strings.Contains(content, expected) {
+			t.Fatalf("expected %q in global search view, got:\n%s", expected, content)
+		}
+	}
+}
+
+func TestGlobalSearchTypingPromptsForEnter(t *testing.T) {
+	m := loadedModel()
+	m.contentMode = globalSearchContent
+	m.globalSearching = true
+	m.globalSearchQuery = "iron"
+
+	content := m.renderMainArea(100, 18)
+	if !strings.Contains(content, "Press enter to search") {
+		t.Fatalf("expected submit prompt, got:\n%s", content)
+	}
+	if strings.Contains(content, "No matches") {
+		t.Fatalf("expected not to show no matches before submit, got:\n%s", content)
+	}
+}
+
 func TestViewFitsTerminalHeight(t *testing.T) {
 	m := loadedModel()
 	for i := range 100 {
