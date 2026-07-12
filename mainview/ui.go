@@ -58,6 +58,7 @@ type Model struct {
 	mode                       sidebarMode
 	contentMode                mainContentMode
 	modeDialogOpen             bool
+	helpOpen                   bool
 	selectedMode               sidebarMode
 	searching                  bool
 	searchPane                 focusPane
@@ -285,6 +286,24 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tickPlayerStatus(m.playbackID)
 		}
 	case tea.KeyMsg:
+		if action, ok := actionForKey(msg.String()); ok && action == actionToggleHelp {
+			m.helpOpen = !m.helpOpen
+			return m, nil
+		}
+
+		if m.helpOpen {
+			if action, ok := actionForKey(msg.String()); ok {
+				if action == actionQuit {
+					m.player.Stop()
+					return m, tea.Quit
+				}
+				if action == actionCloseDialog {
+					m.helpOpen = false
+				}
+			}
+			return m, nil
+		}
+
 		if m.globalSearching {
 			cmd := m.handleGlobalSearchKey(msg)
 			return m, cmd
@@ -363,10 +382,14 @@ func (m Model) View() tea.View {
 	mainArea := m.renderMainArea(layout.MainWidth, layout.BodyHeight)
 	body := lipgloss.JoinHorizontal(lipgloss.Top, sidebar, mainArea)
 	player := m.renderPlayer(layout.Width)
+	status := m.renderStatusBar(layout.Width)
 
-	content := lipgloss.JoinVertical(lipgloss.Left, body, player)
+	content := lipgloss.JoinVertical(lipgloss.Left, body, player, status)
 	if m.modeDialogOpen {
 		content = overlayCentered(content, m.renderModeDialog(), layout.Width, layout.Height)
+	}
+	if m.helpOpen {
+		content = overlayCentered(content, m.renderHelpDialog(), layout.Width, layout.Height)
 	}
 
 	view := tea.NewView(content)

@@ -67,6 +67,11 @@ var (
 			Border(lipgloss.NormalBorder(), true, false, false, false).
 			BorderForeground(lipgloss.Color("#3A3F4B"))
 
+	// One-line command hint footer.
+	StatusBar = lipgloss.NewStyle().
+			Padding(0, 2).
+			Foreground(lipgloss.Color("#7F8C8D"))
+
 	// Pane title.
 	PaneTitle = lipgloss.NewStyle().
 			Bold(true).

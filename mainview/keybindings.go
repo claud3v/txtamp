@@ -17,6 +17,7 @@ const (
 	actionCloseDialog   action = "close_dialog"
 	actionStartSearch   action = "start_search"
 	actionGlobalSearch  action = "global_search"
+	actionToggleHelp    action = "toggle_help"
 )
 
 type keyBinding struct {
@@ -27,6 +28,7 @@ type keyBinding struct {
 
 var defaultKeyBindings = []keyBinding{
 	{Key: "ctrl+c", Action: actionQuit, Description: "Quit"},
+	{Key: "?", Action: actionToggleHelp, Description: "Show shortcuts"},
 	{Key: "esc", Action: actionCloseDialog, Description: "Close dialog"},
 	{Key: "left", Action: actionFocusSidebar, Description: "Focus sidebar"},
 	{Key: "right", Action: actionFocusMainArea, Description: "Focus songs"},
