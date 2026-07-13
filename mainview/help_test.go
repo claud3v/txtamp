@@ -22,7 +22,7 @@ func TestHelpDialogShowsShortcuts(t *testing.T) {
 	m := loadedModel()
 
 	content := m.renderHelpDialog()
-	for _, expected := range []string{"Shortcuts", "space", "Play or pause", "?", "Show shortcuts"} {
+	for _, expected := range []string{"Shortcuts", "space", "Play or pause", "?", "Show shortcuts", "E", "Expand all albums", "C", "Collapse all albums"} {
 		if !strings.Contains(content, expected) {
 			t.Fatalf("expected %q in help dialog, got:\n%s", expected, content)
 		}

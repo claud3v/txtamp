@@ -121,4 +121,13 @@ var (
 	PlayingRow = lipgloss.NewStyle().
 			Bold(true).
 			Foreground(lipgloss.Color("#50FA7B"))
+
+	// Expanded album header.
+	AlbumExpanded = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("#8BE9FD"))
+
+	// Collapsed album header.
+	AlbumCollapsed = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#7F8C8D"))
 )

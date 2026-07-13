@@ -25,6 +25,8 @@ func TestActionForKey(t *testing.T) {
 		{key: "P", expectedAction: actionPlayQueue, found: true},
 		{key: "J", expectedAction: actionQueueDown, found: true},
 		{key: "K", expectedAction: actionQueueUp, found: true},
+		{key: "E", expectedAction: actionExpandAlbums, found: true},
+		{key: "C", expectedAction: actionCollapseAlbums, found: true},
 		{key: "?", expectedAction: actionToggleHelp, found: true},
 		{key: "esc", expectedAction: actionCloseDialog, found: true},
 		{key: "space", expectedAction: actionPlayPause, found: true},

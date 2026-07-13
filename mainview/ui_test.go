@@ -810,13 +810,13 @@ func TestArtistMainAreaRendersAlbumGroups(t *testing.T) {
 	m.artists = []navidrome.Artist{{ID: "artist-1", Name: "Aerosmith"}}
 	m.albums = []albumGroup{
 		{
-			album: navidrome.Album{ID: "album-1", Name: "Aerosmith", Year: 1973},
+			album: navidrome.Album{ID: "album-1", Name: "Aerosmith", Year: 1973, SongCount: 1, Duration: 268},
 			songs: []navidrome.Song{
 				{ID: "song-1", Title: "Dream On", Duration: 268},
 			},
 		},
 		{
-			album: navidrome.Album{ID: "album-2", Name: "Toys in the Attic", Year: 1975},
+			album: navidrome.Album{ID: "album-2", Name: "Toys in the Attic", Year: 1975, SongCount: 1, Duration: 274},
 			songs: []navidrome.Song{
 				{ID: "song-2", Title: "Sweet Emotion", Duration: 274},
 			},
@@ -828,7 +828,7 @@ func TestArtistMainAreaRendersAlbumGroups(t *testing.T) {
 	}
 
 	content := m.renderMainArea(80, 12)
-	for _, expected := range []string{"v Aerosmith (1973)", "Dream On", "v Toys in the Attic (1975)", "Sweet Emotion"} {
+	for _, expected := range []string{"v Aerosmith (1973)", "1 song", "4:28", "Dream On", "v Toys in the Attic (1975)", "Sweet Emotion"} {
 		if !strings.Contains(content, expected) {
 			t.Fatalf("expected %q in artist view, got:\n%s", expected, content)
 		}
@@ -934,6 +934,42 @@ func TestFormatAlbumTitleIncludesYearWhenPresent(t *testing.T) {
 	}
 }
 
+func TestFormatAlbumRowIncludesMetadata(t *testing.T) {
+	album := navidrome.Album{Name: "Toys in the Attic", Year: 1975, SongCount: 9, Duration: 2240}
+	row := formatAlbumRow(album, 80)
+	for _, expected := range []string{"Toys in the Attic (1975)", "9 songs", "37:20"} {
+		if !strings.Contains(row, expected) {
+			t.Fatalf("expected %q in album row, got %q", expected, row)
+		}
+	}
+}
+
+func TestAlbumHeaderStylesDifferForExpandedAndCollapsed(t *testing.T) {
+	expanded := albumHeaderLine("v ", "Toys in the Attic", true, false, false, 40)
+	collapsed := albumHeaderLine("> ", "Toys in the Attic", false, false, false, 40)
+	if expanded == collapsed {
+		t.Fatal("expected expanded and collapsed album rows to render differently")
+	}
+
+	selected := albumHeaderLine("v ", "Toys in the Attic", true, true, true, 40)
+	if !strings.Contains(selected, "Toys in the Attic") {
+		t.Fatalf("expected selected album row to keep title, got %q", selected)
+	}
+}
+
+func TestStatusBarShowsAlbumActionsForSelectedAlbum(t *testing.T) {
+	m := artistAlbumModel()
+	m.focused = songsPane
+	m.selectedArtistRow = 0
+
+	content := m.renderStatusBar(120)
+	for _, expected := range []string{"Enter Toggle", "a Queue Album"} {
+		if !strings.Contains(content, expected) {
+			t.Fatalf("expected %q in status bar, got:\n%s", expected, content)
+		}
+	}
+}
+
 func TestArtistNavigationSkipsCollapsedAlbumSongs(t *testing.T) {
 	m := artistAlbumModel()
 	m.focused = songsPane
@@ -944,6 +980,55 @@ func TestArtistNavigationSkipsCollapsedAlbumSongs(t *testing.T) {
 
 	if m.selectedArtistRow != 1 {
 		t.Fatalf("expected second album row selected, got %d", m.selectedArtistRow)
+	}
+}
+
+func TestCollapseAllAlbums(t *testing.T) {
+	m := artistAlbumModel()
+	m.focused = songsPane
+	m.selectedArtistRow = 3
+
+	updated, _ := m.Update(tea.KeyPressMsg{Code: 'C', Text: "C"})
+	m = updated.(Model)
+
+	if !m.albumCollapsed(0) || !m.albumCollapsed(1) {
+		t.Fatalf("expected all albums collapsed, got %+v", m.collapsedAlbums)
+	}
+	if m.selectedArtistRow != 1 {
+		t.Fatalf("expected selected row to clamp to visible album rows, got %d", m.selectedArtistRow)
+	}
+
+	content := m.renderMainArea(80, 12)
+	if strings.Contains(content, "Dream On") || strings.Contains(content, "Sweet Emotion") {
+		t.Fatalf("expected collapsed songs to be hidden, got:\n%s", content)
+	}
+}
+
+func TestExpandAllAlbums(t *testing.T) {
+	m := artistAlbumModel()
+	m.focused = songsPane
+	m.collapsedAlbums = map[int]bool{0: true, 1: true}
+
+	updated, _ := m.Update(tea.KeyPressMsg{Code: 'E', Text: "E"})
+	m = updated.(Model)
+
+	if m.collapsedAlbums != nil {
+		t.Fatalf("expected collapsed album state to clear, got %+v", m.collapsedAlbums)
+	}
+
+	content := m.renderMainArea(80, 12)
+	if !strings.Contains(content, "Dream On") || !strings.Contains(content, "Sweet Emotion") {
+		t.Fatalf("expected expanded songs to render, got:\n%s", content)
+	}
+}
+
+func TestStatusBarDoesNotShowExpandCollapseAll(t *testing.T) {
+	m := artistAlbumModel()
+	m.focused = songsPane
+
+	content := m.renderStatusBar(120)
+	if strings.Contains(content, "Expand") || strings.Contains(content, "Collapse") {
+		t.Fatalf("expected expand/collapse all to stay out of status bar, got:\n%s", content)
 	}
 }
 
@@ -1118,13 +1203,13 @@ func artistAlbumModel() Model {
 	m.artists = []navidrome.Artist{{ID: "artist-1", Name: "Aerosmith"}}
 	m.albums = []albumGroup{
 		{
-			album: navidrome.Album{ID: "album-1", Name: "Aerosmith", Year: 1973},
+			album: navidrome.Album{ID: "album-1", Name: "Aerosmith", Year: 1973, SongCount: 1, Duration: 268},
 			songs: []navidrome.Song{
 				{ID: "song-1", Title: "Dream On", Duration: 268},
 			},
 		},
 		{
-			album: navidrome.Album{ID: "album-2", Name: "Toys in the Attic", Year: 1975},
+			album: navidrome.Album{ID: "album-2", Name: "Toys in the Attic", Year: 1975, SongCount: 1, Duration: 274},
 			songs: []navidrome.Song{
 				{ID: "song-2", Title: "Sweet Emotion", Duration: 274},
 			},

@@ -10,7 +10,7 @@ import (
 )
 
 type artistRow struct {
-	albumTitle string
+	album      navidrome.Album
 	albumIndex int
 	song       navidrome.Song
 	songIndex  int
@@ -224,7 +224,7 @@ func (m Model) renderArtists(width, height int) string {
 	for i := start; i < end; i++ {
 		row := rows[i]
 		if row.songIndex < 0 {
-			lines = append(lines, albumLine(row.albumTitle, !m.albumCollapsed(row.albumIndex), i == selected, m.focused == songsPane, width-4))
+			lines = append(lines, albumLine(row.album, !m.albumCollapsed(row.albumIndex), i == selected, m.focused == songsPane, width-4))
 			continue
 		}
 
@@ -248,7 +248,7 @@ func (m Model) artistRows() []artistRow {
 	query := m.filterQueryFor(songsPane)
 	for albumIndex, group := range m.albums {
 		albumStart := len(rows)
-		rows = append(rows, artistRow{albumTitle: formatAlbumTitle(group.album), albumIndex: albumIndex, songIndex: -1})
+		rows = append(rows, artistRow{album: group.album, albumIndex: albumIndex, songIndex: -1})
 		if m.albumCollapsed(albumIndex) && query == "" {
 			songIndex += len(group.songs)
 			continue
@@ -300,6 +300,24 @@ func (m *Model) syncSelectedSongToArtistRow(row artistRow) {
 	}
 }
 
+func (m Model) selectedArtistAlbumRow() *artistRow {
+	if m.contentMode != libraryContent || m.mode != artistsMode {
+		return nil
+	}
+
+	rows := m.artistRows()
+	if len(rows) == 0 {
+		return nil
+	}
+
+	row := rows[clamp(m.selectedArtistRow, 0, len(rows)-1)]
+	if row.songIndex >= 0 {
+		return nil
+	}
+
+	return &row
+}
+
 func (m Model) albumCollapsed(albumIndex int) bool {
 	return m.collapsedAlbums != nil && m.collapsedAlbums[albumIndex]
 }
@@ -310,15 +328,47 @@ func (m *Model) toggleAlbum(albumIndex int) {
 	}
 
 	m.collapsedAlbums[albumIndex] = !m.collapsedAlbums[albumIndex]
+	m.clampSelectedArtistRow()
 }
 
-func albumLine(title string, expanded, selected, focused bool, width int) string {
+func (m *Model) expandAllAlbums() {
+	if m.contentMode != libraryContent || m.mode != artistsMode {
+		return
+	}
+
+	m.collapsedAlbums = nil
+	m.clampSelectedArtistRow()
+}
+
+func (m *Model) collapseAllAlbums() {
+	if m.contentMode != libraryContent || m.mode != artistsMode || len(m.albums) == 0 {
+		return
+	}
+
+	m.collapsedAlbums = make(map[int]bool, len(m.albums))
+	for i := range m.albums {
+		m.collapsedAlbums[i] = true
+	}
+	m.clampSelectedArtistRow()
+}
+
+func (m *Model) clampSelectedArtistRow() {
+	rows := m.artistRows()
+	if len(rows) == 0 {
+		m.selectedArtistRow = 0
+		return
+	}
+
+	m.selectedArtistRow = clamp(m.selectedArtistRow, 0, len(rows)-1)
+}
+
+func albumLine(album navidrome.Album, expanded, selected, focused bool, width int) string {
 	prefix := "> "
 	if expanded {
 		prefix = "v "
 	}
 
-	return styledLine(prefix, ui.Truncate(title, max(width-2, 1)), selected, focused, false, width)
+	return albumHeaderLine(prefix, formatAlbumRow(album, max(width-len(prefix), 1)), expanded, selected, focused, width)
 }
 
 func formatAlbumTitle(album navidrome.Album) string {
@@ -327,6 +377,33 @@ func formatAlbumTitle(album navidrome.Album) string {
 	}
 
 	return album.Name
+}
+
+func formatAlbumRow(album navidrome.Album, width int) string {
+	title := formatAlbumTitle(album)
+	metadata := formatAlbumMetadata(album)
+	if metadata == "" {
+		return ui.Truncate(title, width)
+	}
+
+	titleWidth := max(width-len(metadata)-2, 8)
+	return fmt.Sprintf("%-*s  %s", titleWidth, ui.Truncate(title, titleWidth), metadata)
+}
+
+func formatAlbumMetadata(album navidrome.Album) string {
+	parts := []string{}
+	if album.SongCount > 0 {
+		label := "songs"
+		if album.SongCount == 1 {
+			label = "song"
+		}
+		parts = append(parts, fmt.Sprintf("%d %s", album.SongCount, label))
+	}
+	if album.Duration > 0 {
+		parts = append(parts, formatDuration(album.Duration))
+	}
+
+	return strings.Join(parts, "  ")
 }
 
 func (m Model) visibleSongRows(height int) int {

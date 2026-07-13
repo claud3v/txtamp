@@ -441,6 +441,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.moveQueuedSong(1) {
 				return m, m.saveQueue()
 			}
+		case actionExpandAlbums:
+			m.expandAllAlbums()
+		case actionCollapseAlbums:
+			m.collapseAllAlbums()
 		case actionMoveUp:
 			cmd := m.moveSelection(-1)
 			return m, cmd

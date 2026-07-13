@@ -3,33 +3,35 @@ package mainview
 type action string
 
 const (
-	actionQuit          action = "quit"
-	actionFocusSidebar  action = "focus_sidebar"
-	actionFocusMainArea action = "focus_main_area"
-	actionMoveUp        action = "move_up"
-	actionMoveDown      action = "move_down"
-	actionActivate      action = "activate"
-	actionPlayPause     action = "play_pause"
-	actionStopPlayback  action = "stop_playback"
-	actionNextSong      action = "next_song"
-	actionPreviousSong  action = "previous_song"
-	actionSeekBackward  action = "seek_backward"
-	actionSeekForward   action = "seek_forward"
-	actionVolumeUp      action = "volume_up"
-	actionVolumeDown    action = "volume_down"
-	actionAddToQueue    action = "add_to_queue"
-	actionToggleQueue   action = "toggle_queue"
-	actionRemoveQueue   action = "remove_queue"
-	actionClearQueue    action = "clear_queue"
-	actionPlayQueue     action = "play_queue"
-	actionQueueUp       action = "queue_up"
-	actionQueueDown     action = "queue_down"
-	actionShowArtists   action = "show_artists"
-	actionShowPlaylists action = "show_playlists"
-	actionCloseDialog   action = "close_dialog"
-	actionStartSearch   action = "start_search"
-	actionGlobalSearch  action = "global_search"
-	actionToggleHelp    action = "toggle_help"
+	actionQuit           action = "quit"
+	actionFocusSidebar   action = "focus_sidebar"
+	actionFocusMainArea  action = "focus_main_area"
+	actionMoveUp         action = "move_up"
+	actionMoveDown       action = "move_down"
+	actionActivate       action = "activate"
+	actionPlayPause      action = "play_pause"
+	actionStopPlayback   action = "stop_playback"
+	actionNextSong       action = "next_song"
+	actionPreviousSong   action = "previous_song"
+	actionSeekBackward   action = "seek_backward"
+	actionSeekForward    action = "seek_forward"
+	actionVolumeUp       action = "volume_up"
+	actionVolumeDown     action = "volume_down"
+	actionAddToQueue     action = "add_to_queue"
+	actionToggleQueue    action = "toggle_queue"
+	actionRemoveQueue    action = "remove_queue"
+	actionClearQueue     action = "clear_queue"
+	actionPlayQueue      action = "play_queue"
+	actionQueueUp        action = "queue_up"
+	actionQueueDown      action = "queue_down"
+	actionExpandAlbums   action = "expand_albums"
+	actionCollapseAlbums action = "collapse_albums"
+	actionShowArtists    action = "show_artists"
+	actionShowPlaylists  action = "show_playlists"
+	actionCloseDialog    action = "close_dialog"
+	actionStartSearch    action = "start_search"
+	actionGlobalSearch   action = "global_search"
+	actionToggleHelp     action = "toggle_help"
 )
 
 type keyBinding struct {
@@ -46,18 +48,20 @@ var defaultKeyBindings = []keyBinding{
 	{Key: "right", Action: actionFocusMainArea, Description: "Focus songs"},
 	{Key: "/", Action: actionStartSearch, Description: "Filter focused pane"},
 	{Key: "s", Action: actionGlobalSearch, Description: "Global search"},
-	{Key: "a", Action: actionAddToQueue, Description: "Add selected song to queue"},
+	{Key: "a", Action: actionAddToQueue, Description: "Add selected song or album to queue"},
 	{Key: "q", Action: actionToggleQueue, Description: "Show queue"},
 	{Key: "d", Action: actionRemoveQueue, Description: "Remove queued song"},
 	{Key: "c", Action: actionClearQueue, Description: "Clear queue"},
 	{Key: "P", Action: actionPlayQueue, Description: "Play queue from top"},
 	{Key: "J", Action: actionQueueDown, Description: "Move queued song down"},
 	{Key: "K", Action: actionQueueUp, Description: "Move queued song up"},
+	{Key: "E", Action: actionExpandAlbums, Description: "Expand all albums"},
+	{Key: "C", Action: actionCollapseAlbums, Description: "Collapse all albums"},
 	{Key: "1", Action: actionShowArtists, Description: "Show artists"},
 	{Key: "2", Action: actionShowPlaylists, Description: "Show playlists"},
 	{Key: "up", Action: actionMoveUp, Description: "Move up"},
 	{Key: "down", Action: actionMoveDown, Description: "Move down"},
-	{Key: "enter", Action: actionActivate, Description: "Open or play selected item"},
+	{Key: "enter", Action: actionActivate, Description: "Open, play, or toggle selected item"},
 	{Key: " ", Action: actionPlayPause, Description: "Play or pause"},
 	{Key: "space", Action: actionPlayPause, Description: "Play or pause"},
 	{Key: "x", Action: actionStopPlayback, Description: "Stop playback"},

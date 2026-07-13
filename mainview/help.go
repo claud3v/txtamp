@@ -7,10 +7,18 @@ import (
 )
 
 func (m Model) renderStatusBar(width int) string {
-	text := fmt.Sprintf("Queue %d  Arrows Navigate  Enter Play  Space Play/Pause  a Add  q Queue  ? Help", len(m.queue))
+	text := fmt.Sprintf("Queue %d  %s  Space Play/Pause  q Queue  ? Help", len(m.queue), m.contextualStatusHint())
 	return ui.StatusBar.
 		Width(width).
 		Render(ui.Truncate(text, max(width-4, 1)))
+}
+
+func (m Model) contextualStatusHint() string {
+	if m.selectedArtistAlbumRow() != nil && m.focused == songsPane && m.contentMode == libraryContent {
+		return "Arrows Navigate  Enter Toggle  a Queue Album"
+	}
+
+	return "Arrows Navigate  Enter Play  a Add"
 }
 
 func (m Model) renderHelpDialog() string {
