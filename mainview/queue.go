@@ -3,6 +3,7 @@ package mainview
 import (
 	"fmt"
 	"strings"
+	"txtamp/config"
 	"txtamp/navidrome"
 	"txtamp/ui"
 
@@ -31,6 +32,7 @@ func (m *Model) addSelectedSongToQueue() bool {
 	}
 
 	m.queue = append(m.queue, song)
+	m.queueDirty = true
 	m.showToast("Added to queue: " + song.Title)
 	return true
 }
@@ -66,26 +68,29 @@ func (m *Model) moveQueueSelection(delta int) {
 	m.selectedQueue = clamp(m.selectedQueue+delta, 0, len(m.queue)-1)
 }
 
-func (m *Model) removeSelectedQueueSong() {
+func (m *Model) removeSelectedQueueSong() bool {
 	if m.contentMode != queueContent || len(m.queue) == 0 {
-		return
+		return false
 	}
 
 	m.removeQueueSongAt(m.selectedQueue)
+	return true
 }
 
-func (m *Model) moveQueuedSong(delta int) {
+func (m *Model) moveQueuedSong(delta int) bool {
 	if m.contentMode != queueContent || len(m.queue) == 0 {
-		return
+		return false
 	}
 
 	next := clamp(m.selectedQueue+delta, 0, len(m.queue)-1)
 	if next == m.selectedQueue {
-		return
+		return false
 	}
 
 	m.queue[m.selectedQueue], m.queue[next] = m.queue[next], m.queue[m.selectedQueue]
 	m.selectedQueue = next
+	m.queueDirty = true
+	return true
 }
 
 func (m *Model) playSelectedQueueSong() tea.Cmd {
@@ -106,7 +111,7 @@ func (m *Model) consumeQueuedSongAt(index int) tea.Cmd {
 	song := m.queue[index]
 	m.removeQueueSongAt(index)
 
-	return m.playSongAtIndex(song, -1)
+	return tea.Batch(m.playSongAtIndex(song, -1), m.saveQueue())
 }
 
 func (m *Model) removeQueueSongAt(index int) {
@@ -117,6 +122,14 @@ func (m *Model) removeQueueSongAt(index int) {
 	index = clamp(index, 0, len(m.queue)-1)
 	m.queue = append(m.queue[:index], m.queue[index+1:]...)
 	m.selectedQueue = clamp(m.selectedQueue, 0, max(len(m.queue)-1, 0))
+	m.queueDirty = true
+}
+
+func (m Model) saveQueue() tea.Cmd {
+	songs := append([]navidrome.Song(nil), m.queue...)
+	return func() tea.Msg {
+		return queueSavedMsg{err: config.SaveQueue(songs)}
+	}
 }
 
 func (m Model) renderQueue(width, height int) string {

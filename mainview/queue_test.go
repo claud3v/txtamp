@@ -131,6 +131,34 @@ func TestNextSongConsumesQueueBeforePlaylist(t *testing.T) {
 	}
 }
 
+func TestQueueLoadedStoresSavedQueue(t *testing.T) {
+	m := loadedModel()
+	savedQueue := []navidrome.Song{{ID: "saved-song", Title: "Saved Song"}}
+
+	updated, _ := m.Update(queueLoadedMsg{songs: savedQueue, found: true})
+	m = updated.(Model)
+
+	if len(m.queue) != 1 || m.queue[0].ID != "saved-song" {
+		t.Fatalf("expected saved queue to load, got %+v", m.queue)
+	}
+}
+
+func TestQueueLoadedDoesNotOverwriteDirtyQueue(t *testing.T) {
+	m := loadedModel()
+	m.queue = []navidrome.Song{{ID: "local-song", Title: "Local Song"}}
+	m.queueDirty = true
+
+	updated, _ := m.Update(queueLoadedMsg{
+		songs: []navidrome.Song{{ID: "saved-song", Title: "Saved Song"}},
+		found: true,
+	})
+	m = updated.(Model)
+
+	if len(m.queue) != 1 || m.queue[0].ID != "local-song" {
+		t.Fatalf("expected local queue to remain, got %+v", m.queue)
+	}
+}
+
 func TestAddGlobalSearchSongToQueue(t *testing.T) {
 	m := loadedModel()
 	m.contentMode = globalSearchContent

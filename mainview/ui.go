@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"time"
+	"txtamp/config"
 	"txtamp/navidrome"
 	"txtamp/player"
 	"txtamp/ui"
@@ -88,6 +89,7 @@ type Model struct {
 	err                        error
 	toast                      string
 	toastID                    int
+	queueDirty                 bool
 
 	playlists []navidrome.Playlist
 	artists   []navidrome.Artist
@@ -151,6 +153,16 @@ type clearToastMsg struct {
 	toastID int
 }
 
+type queueLoadedMsg struct {
+	songs []navidrome.Song
+	found bool
+	err   error
+}
+
+type queueSavedMsg struct {
+	err error
+}
+
 func New(connectedTo string, client navidrome.Client) Model {
 	return Model{
 		connectedTo: connectedTo,
@@ -163,7 +175,7 @@ func New(connectedTo string, client navidrome.Client) Model {
 }
 
 func (m Model) Init() tea.Cmd {
-	return m.loadPlaylists()
+	return tea.Batch(m.loadPlaylists(), loadSavedQueue())
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -274,6 +286,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.toastID == m.toastID {
 			m.toast = ""
 		}
+	case queueLoadedMsg:
+		if msg.err != nil {
+			m.err = msg.err
+			return m, nil
+		}
+		if msg.found && !m.queueDirty {
+			m.queue = msg.songs
+			m.selectedQueue = clamp(m.selectedQueue, 0, max(len(m.queue)-1, 0))
+		}
+	case queueSavedMsg:
+		if msg.err != nil {
+			m.err = msg.err
+		}
 	case playerStatusMsg:
 		if msg.playbackID != m.playbackID {
 			return m, nil
@@ -365,14 +390,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.toggleQueue()
 		case actionAddToQueue:
 			if m.addSelectedSongToQueue() {
-				return m, clearToast(m.toastID)
+				return m, tea.Batch(clearToast(m.toastID), m.saveQueue())
 			}
 		case actionRemoveQueue:
-			m.removeSelectedQueueSong()
+			if m.removeSelectedQueueSong() {
+				return m, m.saveQueue()
+			}
 		case actionQueueUp:
-			m.moveQueuedSong(-1)
+			if m.moveQueuedSong(-1) {
+				return m, m.saveQueue()
+			}
 		case actionQueueDown:
-			m.moveQueuedSong(1)
+			if m.moveQueuedSong(1) {
+				return m, m.saveQueue()
+			}
 		case actionMoveUp:
 			cmd := m.moveSelection(-1)
 			return m, cmd
@@ -481,6 +512,13 @@ func clearToast(toastID int) tea.Cmd {
 	return tea.Tick(toastPeriod, func(t time.Time) tea.Msg {
 		return clearToastMsg{toastID: toastID}
 	})
+}
+
+func loadSavedQueue() tea.Cmd {
+	return func() tea.Msg {
+		songs, found, err := config.LoadQueue()
+		return queueLoadedMsg{songs: songs, found: found, err: err}
+	}
 }
 
 func (m Model) renderModeDialog() string {
