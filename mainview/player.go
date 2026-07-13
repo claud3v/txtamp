@@ -8,16 +8,16 @@ import (
 )
 
 func (m Model) renderPlayer(width int) string {
-	status := "-"
+	status := "Stopped"
 	nowPlaying := "No song selected"
 	elapsed := "00:00"
 	duration := "00:00"
 
 	if m.currentSong != nil {
 		if m.paused {
-			status = "||"
+			status = "Paused"
 		} else {
-			status = ">"
+			status = "Playing"
 		}
 
 		nowPlaying = formatNowPlaying(*m.currentSong)
@@ -29,7 +29,7 @@ func (m Model) renderPlayer(width int) string {
 	timeText := elapsed + " / " + duration
 	barWidth := max(innerWidth-len(timeText)-3, 8)
 
-	titleLine := fmt.Sprintf("%s  %s", status, ui.Truncate(nowPlaying, max(innerWidth-3, 8)))
+	titleLine := fmt.Sprintf("%s  %s", status, ui.Truncate(nowPlaying, max(innerWidth-len(status)-2, 8)))
 	progressLine := fmt.Sprintf("%s  %s", progressBar(m.elapsed, m.currentDuration(), barWidth), timeText)
 
 	return ui.PlayerBar.

@@ -310,6 +310,182 @@ func TestPreviousAliasPlaysPreviousSong(t *testing.T) {
 	}
 }
 
+func TestSeekForwardKeyReturnsSeekCommand(t *testing.T) {
+	m := loadedModel()
+	m.currentSong = &m.songs[0]
+	m.elapsed = 20
+	m.duration = 100
+
+	updated, cmd := m.Update(tea.KeyPressMsg{Code: '.', Text: "."})
+	m = updated.(Model)
+
+	if cmd == nil {
+		t.Fatal("expected seek command")
+	}
+	if m.elapsed != 20 {
+		t.Fatalf("expected elapsed to wait for seek result, got %d", m.elapsed)
+	}
+	if m.toast != "+10s" {
+		t.Fatalf("expected seek toast, got %q", m.toast)
+	}
+}
+
+func TestSeekBackwardKeyReturnsSeekCommand(t *testing.T) {
+	m := loadedModel()
+	m.currentSong = &m.songs[0]
+	m.elapsed = 20
+	m.duration = 100
+
+	updated, cmd := m.Update(tea.KeyPressMsg{Code: ',', Text: ","})
+	m = updated.(Model)
+
+	if cmd == nil {
+		t.Fatal("expected seek command")
+	}
+	if m.toast != "-10s" {
+		t.Fatalf("expected seek toast, got %q", m.toast)
+	}
+}
+
+func TestSeekKeyWithoutCurrentSongDoesNothing(t *testing.T) {
+	m := loadedModel()
+
+	updated, cmd := m.Update(tea.KeyPressMsg{Code: '.', Text: "."})
+	m = updated.(Model)
+
+	if cmd != nil {
+		t.Fatal("expected no seek command")
+	}
+	if m.elapsed != 0 {
+		t.Fatalf("expected elapsed to stay 0, got %d", m.elapsed)
+	}
+}
+
+func TestSeekMessageUpdatesElapsed(t *testing.T) {
+	m := loadedModel()
+	m.elapsed = 20
+
+	updated, _ := m.Update(seekMsg{elapsed: 30})
+	m = updated.(Model)
+
+	if m.elapsed != 30 {
+		t.Fatalf("expected elapsed 30, got %d", m.elapsed)
+	}
+}
+
+func TestSeekRelativeClampsElapsed(t *testing.T) {
+	m := loadedModel()
+	m.currentSong = &m.songs[0]
+	m.elapsed = 5
+	m.duration = 100
+
+	cmd := m.seekRelative(-seekStep)
+	if cmd == nil {
+		t.Fatal("expected seek command")
+	}
+	msg := cmd().(seekMsg)
+	if msg.elapsed != 0 {
+		t.Fatalf("expected backward seek to clamp to 0, got %d", msg.elapsed)
+	}
+
+	m.elapsed = 95
+	cmd = m.seekRelative(seekStep)
+	msg = cmd().(seekMsg)
+	if msg.elapsed != 100 {
+		t.Fatalf("expected forward seek to clamp to duration, got %d", msg.elapsed)
+	}
+}
+
+func TestStopPlaybackKeyReturnsStopCommand(t *testing.T) {
+	m := loadedModel()
+	m.currentSong = &m.songs[0]
+	m.playbackID = 4
+
+	updated, cmd := m.Update(tea.KeyPressMsg{Code: 'x', Text: "x"})
+	m = updated.(Model)
+
+	if cmd == nil {
+		t.Fatal("expected stop command")
+	}
+	if m.playbackID != 5 {
+		t.Fatalf("expected playback id to increment, got %d", m.playbackID)
+	}
+	if m.toast != "Stopped" {
+		t.Fatalf("expected stop toast, got %q", m.toast)
+	}
+}
+
+func TestStopMessageClearsPlaybackState(t *testing.T) {
+	m := loadedModel()
+	m.currentSong = &m.songs[0]
+	m.elapsed = 42
+	m.duration = 268
+	m.paused = true
+
+	updated, _ := m.Update(stopMsg{})
+	m = updated.(Model)
+
+	if m.currentSong != nil {
+		t.Fatalf("expected current song to clear, got %+v", m.currentSong)
+	}
+	if m.elapsed != 0 || m.duration != 0 || m.paused {
+		t.Fatalf("expected playback state to clear, got elapsed=%d duration=%d paused=%v", m.elapsed, m.duration, m.paused)
+	}
+}
+
+func TestStaleStatusAfterStopDoesNotAdvance(t *testing.T) {
+	m := loadedModel()
+	m.currentSong = nil
+	m.playbackID = 2
+
+	updated, cmd := m.Update(playerStatusMsg{
+		playbackID: 1,
+		err:        player.ErrNotRunning,
+	})
+	m = updated.(Model)
+
+	if cmd != nil {
+		t.Fatal("expected stale stopped status to be ignored")
+	}
+	if m.selectedSong != 0 {
+		t.Fatalf("expected selected song to stay put, got %d", m.selectedSong)
+	}
+}
+
+func TestVolumeKeysReturnVolumeCommands(t *testing.T) {
+	m := loadedModel()
+	m.currentSong = &m.songs[0]
+
+	updated, cmd := m.Update(tea.KeyPressMsg{Code: '+', Text: "+"})
+	m = updated.(Model)
+	if cmd == nil {
+		t.Fatal("expected volume up command")
+	}
+	if m.toast != "Volume Up" {
+		t.Fatalf("expected volume up toast, got %q", m.toast)
+	}
+
+	updated, cmd = m.Update(tea.KeyPressMsg{Code: '-', Text: "-"})
+	m = updated.(Model)
+	if cmd == nil {
+		t.Fatal("expected volume down command")
+	}
+	if m.toast != "Volume Down" {
+		t.Fatalf("expected volume down toast, got %q", m.toast)
+	}
+}
+
+func TestVolumeKeyWithoutCurrentSongDoesNothing(t *testing.T) {
+	m := loadedModel()
+
+	updated, cmd := m.Update(tea.KeyPressMsg{Code: '+', Text: "+"})
+	m = updated.(Model)
+
+	if cmd != nil {
+		t.Fatal("expected no volume command")
+	}
+}
+
 func TestPlaylistsLoadedLoadsFirstPlaylist(t *testing.T) {
 	m := New("home", navidrome.Client{})
 

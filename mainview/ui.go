@@ -3,6 +3,7 @@ package mainview
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 	"txtamp/config"
@@ -20,6 +21,8 @@ const (
 	statusPeriod = 1 * time.Second
 	toastPeriod  = 2 * time.Second
 	restartLimit = 3
+	seekStep     = 10
+	volumeStep   = 5
 )
 
 type focusPane int
@@ -136,6 +139,15 @@ type playbackMsg struct {
 }
 
 type seekMsg struct {
+	elapsed int
+	err     error
+}
+
+type stopMsg struct {
+	err error
+}
+
+type volumeMsg struct {
 	err error
 }
 
@@ -274,8 +286,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case seekMsg:
 		m.err = msg.err
 		if msg.err == nil {
-			m.elapsed = 0
+			m.elapsed = msg.elapsed
 		}
+	case stopMsg:
+		m.err = msg.err
+		if msg.err == nil {
+			m.currentSong = nil
+			m.elapsed = 0
+			m.duration = 0
+			m.paused = false
+		}
+	case volumeMsg:
+		m.err = msg.err
 	case playerTickMsg:
 		if m.currentSong == nil || msg.playbackID != m.playbackID {
 			return m, nil
@@ -425,12 +447,27 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case actionPlayPause:
 			cmd := m.togglePlayPause()
 			return m, cmd
+		case actionStopPlayback:
+			cmd := m.stopPlayback()
+			return m, withToastClear(cmd, m.toastID)
 		case actionNextSong:
 			cmd := m.playNextSong()
 			return m, cmd
 		case actionPreviousSong:
 			cmd := m.playPreviousSong()
 			return m, cmd
+		case actionSeekBackward:
+			cmd := m.seekRelative(-seekStep)
+			return m, withToastClear(cmd, m.toastID)
+		case actionSeekForward:
+			cmd := m.seekRelative(seekStep)
+			return m, withToastClear(cmd, m.toastID)
+		case actionVolumeDown:
+			cmd := m.adjustVolume(-volumeStep)
+			return m, withToastClear(cmd, m.toastID)
+		case actionVolumeUp:
+			cmd := m.adjustVolume(volumeStep)
+			return m, withToastClear(cmd, m.toastID)
 		case actionShowArtists:
 			cmd := m.switchMode(artistsMode)
 			return m, cmd
@@ -521,6 +558,14 @@ func clearToast(toastID int) tea.Cmd {
 	return tea.Tick(toastPeriod, func(t time.Time) tea.Msg {
 		return clearToastMsg{toastID: toastID}
 	})
+}
+
+func withToastClear(cmd tea.Cmd, toastID int) tea.Cmd {
+	if cmd == nil {
+		return nil
+	}
+
+	return tea.Batch(cmd, clearToast(toastID))
 }
 
 func loadSavedQueue() tea.Cmd {
@@ -927,8 +972,68 @@ func (m *Model) seekStart() tea.Cmd {
 	player := m.player
 
 	return func() tea.Msg {
-		return seekMsg{err: player.SeekStart()}
+		return seekMsg{elapsed: 0, err: player.SeekStart()}
 	}
+}
+
+func (m *Model) seekRelative(seconds int) tea.Cmd {
+	if m.currentSong == nil {
+		return nil
+	}
+
+	elapsed := max(m.elapsed+seconds, 0)
+	if m.currentDuration() > 0 {
+		elapsed = min(elapsed, m.currentDuration())
+	}
+	m.showToast(formatSeekToast(seconds))
+	player := m.player
+
+	return func() tea.Msg {
+		return seekMsg{elapsed: elapsed, err: player.Seek(seconds)}
+	}
+}
+
+func (m *Model) stopPlayback() tea.Cmd {
+	if m.currentSong == nil {
+		return nil
+	}
+
+	player := m.player
+	m.playbackID++
+	m.showToast("Stopped")
+
+	return func() tea.Msg {
+		return stopMsg{err: player.Stop()}
+	}
+}
+
+func (m *Model) adjustVolume(delta int) tea.Cmd {
+	if m.currentSong == nil {
+		return nil
+	}
+
+	player := m.player
+	m.showToast(formatVolumeToast(delta))
+
+	return func() tea.Msg {
+		return volumeMsg{err: player.AdjustVolume(delta)}
+	}
+}
+
+func formatSeekToast(seconds int) string {
+	if seconds > 0 {
+		return fmt.Sprintf("+%ds", seconds)
+	}
+
+	return fmt.Sprintf("%ds", seconds)
+}
+
+func formatVolumeToast(delta int) string {
+	if delta > 0 {
+		return "Volume Up"
+	}
+
+	return "Volume Down"
 }
 
 func (m Model) playbackFinished() bool {

@@ -12,6 +12,8 @@ func TestActionForKey(t *testing.T) {
 		{key: "]", expectedAction: actionNextSong, found: true},
 		{key: "p", expectedAction: actionPreviousSong, found: true},
 		{key: "[", expectedAction: actionPreviousSong, found: true},
+		{key: ",", expectedAction: actionSeekBackward, found: true},
+		{key: ".", expectedAction: actionSeekForward, found: true},
 		{key: "1", expectedAction: actionShowArtists, found: true},
 		{key: "2", expectedAction: actionShowPlaylists, found: true},
 		{key: "/", expectedAction: actionStartSearch, found: true},
@@ -26,7 +28,11 @@ func TestActionForKey(t *testing.T) {
 		{key: "?", expectedAction: actionToggleHelp, found: true},
 		{key: "esc", expectedAction: actionCloseDialog, found: true},
 		{key: "space", expectedAction: actionPlayPause, found: true},
-		{key: "x", found: false},
+		{key: "x", expectedAction: actionStopPlayback, found: true},
+		{key: "+", expectedAction: actionVolumeUp, found: true},
+		{key: "=", expectedAction: actionVolumeUp, found: true},
+		{key: "-", expectedAction: actionVolumeDown, found: true},
+		{key: "z", found: false},
 	}
 
 	for _, test := range tests {

@@ -10,8 +10,13 @@ const (
 	actionMoveDown      action = "move_down"
 	actionActivate      action = "activate"
 	actionPlayPause     action = "play_pause"
+	actionStopPlayback  action = "stop_playback"
 	actionNextSong      action = "next_song"
 	actionPreviousSong  action = "previous_song"
+	actionSeekBackward  action = "seek_backward"
+	actionSeekForward   action = "seek_forward"
+	actionVolumeUp      action = "volume_up"
+	actionVolumeDown    action = "volume_down"
 	actionAddToQueue    action = "add_to_queue"
 	actionToggleQueue   action = "toggle_queue"
 	actionRemoveQueue   action = "remove_queue"
@@ -55,10 +60,16 @@ var defaultKeyBindings = []keyBinding{
 	{Key: "enter", Action: actionActivate, Description: "Open or play selected item"},
 	{Key: " ", Action: actionPlayPause, Description: "Play or pause"},
 	{Key: "space", Action: actionPlayPause, Description: "Play or pause"},
+	{Key: "x", Action: actionStopPlayback, Description: "Stop playback"},
 	{Key: "n", Action: actionNextSong, Description: "Next song"},
 	{Key: "]", Action: actionNextSong, Description: "Next song"},
 	{Key: "p", Action: actionPreviousSong, Description: "Previous or restart song"},
 	{Key: "[", Action: actionPreviousSong, Description: "Previous or restart song"},
+	{Key: ",", Action: actionSeekBackward, Description: "Seek backward 10 seconds"},
+	{Key: ".", Action: actionSeekForward, Description: "Seek forward 10 seconds"},
+	{Key: "+", Action: actionVolumeUp, Description: "Volume up"},
+	{Key: "=", Action: actionVolumeUp, Description: "Volume up"},
+	{Key: "-", Action: actionVolumeDown, Description: "Volume down"},
 }
 
 func actionForKey(key string) (action, bool) {

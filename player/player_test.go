@@ -66,6 +66,107 @@ func TestSendWritesCommandToSocket(t *testing.T) {
 	}
 }
 
+func TestSeekSendsRelativeCommand(t *testing.T) {
+	socketPath := filepath.Join(t.TempDir(), "mpv.sock")
+	listener, err := net.Listen("unix", socketPath)
+	if err != nil {
+		t.Fatalf("expected listener, got %v", err)
+	}
+	defer listener.Close()
+
+	commands := make(chan []any, 1)
+	go func() {
+		conn, err := listener.Accept()
+		if err != nil {
+			commands <- nil
+			return
+		}
+		defer conn.Close()
+
+		var message struct {
+			Command []any `json:"command"`
+		}
+		if err := json.NewDecoder(bufio.NewReader(conn)).Decode(&message); err != nil {
+			commands <- nil
+			return
+		}
+
+		if err := json.NewEncoder(conn).Encode(map[string]string{"error": "success"}); err != nil {
+			commands <- nil
+			return
+		}
+
+		commands <- message.Command
+	}()
+
+	p := &Player{socketPath: socketPath}
+	startFakeProcess(t, p)
+	if err := p.Seek(10); err != nil {
+		t.Fatalf("expected seek to send command, got %v", err)
+	}
+
+	command := <-commands
+	if len(command) != 3 {
+		t.Fatalf("expected 3 command parts, got %#v", command)
+	}
+	if command[0] != "seek" || command[1] != float64(10) || command[2] != "relative" {
+		t.Fatalf("unexpected command: %#v", command)
+	}
+}
+
+func TestAdjustVolumeSendsAddVolumeCommand(t *testing.T) {
+	socketPath := filepath.Join(os.TempDir(), "txtamp-test-volume.sock")
+	os.Remove(socketPath)
+	t.Cleanup(func() {
+		os.Remove(socketPath)
+	})
+
+	listener, err := net.Listen("unix", socketPath)
+	if err != nil {
+		t.Fatalf("expected listener, got %v", err)
+	}
+	defer listener.Close()
+
+	commands := make(chan []any, 1)
+	go func() {
+		conn, err := listener.Accept()
+		if err != nil {
+			commands <- nil
+			return
+		}
+		defer conn.Close()
+
+		var message struct {
+			Command []any `json:"command"`
+		}
+		if err := json.NewDecoder(bufio.NewReader(conn)).Decode(&message); err != nil {
+			commands <- nil
+			return
+		}
+
+		if err := json.NewEncoder(conn).Encode(map[string]string{"error": "success"}); err != nil {
+			commands <- nil
+			return
+		}
+
+		commands <- message.Command
+	}()
+
+	p := &Player{socketPath: socketPath}
+	startFakeProcess(t, p)
+	if err := p.AdjustVolume(5); err != nil {
+		t.Fatalf("expected volume adjustment to send command, got %v", err)
+	}
+
+	command := <-commands
+	if len(command) != 3 {
+		t.Fatalf("expected 3 command parts, got %#v", command)
+	}
+	if command[0] != "add" || command[1] != "volume" || command[2] != float64(5) {
+		t.Fatalf("unexpected command: %#v", command)
+	}
+}
+
 func TestStatusReadsProperties(t *testing.T) {
 	socketPath := filepath.Join(t.TempDir(), "mpv.sock")
 	listener, err := net.Listen("unix", socketPath)

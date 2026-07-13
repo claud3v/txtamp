@@ -96,6 +96,24 @@ func (p *Player) SeekStart() error {
 	return checkResponse(response)
 }
 
+func (p *Player) Seek(seconds int) error {
+	response, err := p.send("seek", seconds, "relative")
+	if err != nil {
+		return err
+	}
+
+	return checkResponse(response)
+}
+
+func (p *Player) AdjustVolume(delta int) error {
+	response, err := p.send("add", "volume", delta)
+	if err != nil {
+		return err
+	}
+
+	return checkResponse(response)
+}
+
 func (p *Player) Status() (Status, error) {
 	elapsed, err := p.getNumberProperty("time-pos")
 	if err != nil {
