@@ -81,7 +81,9 @@ type Model struct {
 	loadedArtistID             string
 	selectedPlaylist           int
 	selectedArtist             int
+	selectedArtistRow          int
 	selectedSong               int
+	collapsedAlbums            map[int]bool
 	currentSong                *navidrome.Song
 	paused                     bool
 	elapsed                    int
@@ -238,6 +240,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.albums = nil
 		m.songs = nil
 		m.selectedArtist = 0
+		m.selectedArtistRow = 0
+		m.collapsedAlbums = nil
 		m.selectedSong = 0
 
 		if msg.err != nil || len(m.artists) == 0 {
@@ -259,6 +263,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.loadedArtistID = msg.artistID
 		m.albums = msg.albums
 		m.songs = msg.songs
+		m.selectedArtistRow = 0
+		m.collapsedAlbums = nil
 		m.selectedSong = 0
 	case globalSearchLoadedMsg:
 		if msg.query != m.globalSearchSubmittedQuery {
@@ -622,6 +628,11 @@ func (m *Model) moveSelection(delta int) tea.Cmd {
 
 		return m.moveSidebarSelection(delta)
 	case songsPane:
+		if m.mode == artistsMode {
+			m.moveArtistRowSelection(delta)
+			return nil
+		}
+
 		songs := m.filteredSongs()
 		if len(songs) == 0 {
 			return nil
@@ -656,6 +667,10 @@ func (m *Model) activateSelection() tea.Cmd {
 		}
 
 		return m.loadSelectedSidebarItem()
+	}
+
+	if m.mode == artistsMode {
+		return m.activateArtistRow()
 	}
 
 	songs := m.filteredSongs()
@@ -731,6 +746,8 @@ func (m *Model) moveSidebarSelection(delta int) tea.Cmd {
 		position := m.selectedArtistPosition(artists)
 		position = clamp(position+delta, 0, len(artists)-1)
 		m.selectedArtist = artists[position].index
+		m.selectedArtistRow = 0
+		m.collapsedAlbums = nil
 		m.selectedSong = 0
 		if m.selectedArtist != previous {
 			return m.loadSelectedArtist()
@@ -750,6 +767,8 @@ func (m *Model) switchMode(mode sidebarMode) tea.Cmd {
 	m.selectedSong = 0
 	m.songs = nil
 	m.albums = nil
+	m.selectedArtistRow = 0
+	m.collapsedAlbums = nil
 
 	switch mode {
 	case playlistsMode:

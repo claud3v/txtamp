@@ -212,7 +212,7 @@ func TestGetArtistAlbums(t *testing.T) {
 					"id": "artist-1",
 					"name": "Aerosmith",
 					"album": [
-						{"id": "album-1", "name": "Toys in the Attic", "artist": "Aerosmith", "songCount": 9, "duration": 2240}
+						{"id": "album-1", "name": "Toys in the Attic", "artist": "Aerosmith", "year": 1975, "songCount": 9, "duration": 2240}
 					]
 				}
 			}
@@ -235,6 +235,9 @@ func TestGetArtistAlbums(t *testing.T) {
 	}
 	if albums[0].ID != "album-1" || albums[0].Name != "Toys in the Attic" {
 		t.Fatalf("unexpected album: %+v", albums[0])
+	}
+	if albums[0].Year != 1975 {
+		t.Fatalf("expected album year 1975, got %d", albums[0].Year)
 	}
 }
 

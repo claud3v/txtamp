@@ -5,10 +5,13 @@ import (
 	"strings"
 	"txtamp/navidrome"
 	"txtamp/ui"
+
+	tea "charm.land/bubbletea/v2"
 )
 
 type artistRow struct {
 	albumTitle string
+	albumIndex int
 	song       navidrome.Song
 	songIndex  int
 }
@@ -216,19 +219,19 @@ func (m Model) renderArtists(width, height int) string {
 		lines = append(lines, ui.Subtitle.Render("No matches"))
 	}
 
-	selectedRow := selectedArtistRow(rows, m.selectedSong)
-	start, end := visibleRange(selectedRow, len(rows), m.visibleSongRows(height))
+	selected := clamp(m.selectedArtistRow, 0, max(len(rows)-1, 0))
+	start, end := visibleRange(selected, len(rows), m.visibleSongRows(height))
 	for i := start; i < end; i++ {
 		row := rows[i]
 		if row.songIndex < 0 {
-			lines = append(lines, albumLine(row.albumTitle, width-4))
+			lines = append(lines, albumLine(row.albumTitle, !m.albumCollapsed(row.albumIndex), i == selected, m.focused == songsPane, width-4))
 			continue
 		}
 
 		titleWidth := max(width-22, 10)
 		title := ui.Truncate(row.song.Title, titleWidth)
 		line := fmt.Sprintf("%-*"+"s %5s", titleWidth, title, formatDuration(row.song.Duration))
-		line = nestedSongLine(line, row.songIndex, m, width-4)
+		line = nestedSongLine(line, row.songIndex, i == selected, m, width-4)
 		lines = append(lines, line)
 	}
 
@@ -243,12 +246,16 @@ func (m Model) artistRows() []artistRow {
 	rows := make([]artistRow, 0, len(m.albums)+len(m.songs))
 	songIndex := 0
 	query := m.filterQueryFor(songsPane)
-	for _, group := range m.albums {
+	for albumIndex, group := range m.albums {
 		albumStart := len(rows)
-		rows = append(rows, artistRow{albumTitle: group.album.Name, songIndex: -1})
+		rows = append(rows, artistRow{albumTitle: formatAlbumTitle(group.album), albumIndex: albumIndex, songIndex: -1})
+		if m.albumCollapsed(albumIndex) && query == "" {
+			songIndex += len(group.songs)
+			continue
+		}
 		for _, song := range group.songs {
 			if query == "" || songMatches(song, query) {
-				rows = append(rows, artistRow{song: song, songIndex: songIndex})
+				rows = append(rows, artistRow{albumIndex: albumIndex, song: song, songIndex: songIndex})
 			}
 			songIndex++
 		}
@@ -260,18 +267,66 @@ func (m Model) artistRows() []artistRow {
 	return rows
 }
 
-func selectedArtistRow(rows []artistRow, selectedSong int) int {
-	for i, row := range rows {
-		if row.songIndex == selectedSong {
-			return i
-		}
+func (m *Model) moveArtistRowSelection(delta int) {
+	rows := m.artistRows()
+	if len(rows) == 0 {
+		return
 	}
 
-	return 0
+	m.selectedArtistRow = clamp(m.selectedArtistRow+delta, 0, len(rows)-1)
+	m.syncSelectedSongToArtistRow(rows[m.selectedArtistRow])
 }
 
-func albumLine(title string, width int) string {
-	return ui.PaneTitle.Width(width).Render("> " + ui.Truncate(title, max(width-2, 1)))
+func (m *Model) activateArtistRow() tea.Cmd {
+	rows := m.artistRows()
+	if len(rows) == 0 {
+		return nil
+	}
+
+	m.selectedArtistRow = clamp(m.selectedArtistRow, 0, len(rows)-1)
+	row := rows[m.selectedArtistRow]
+	if row.songIndex >= 0 {
+		m.selectedSong = row.songIndex
+		return m.playSongAt(row.songIndex)
+	}
+
+	m.toggleAlbum(row.albumIndex)
+	return nil
+}
+
+func (m *Model) syncSelectedSongToArtistRow(row artistRow) {
+	if row.songIndex >= 0 {
+		m.selectedSong = row.songIndex
+	}
+}
+
+func (m Model) albumCollapsed(albumIndex int) bool {
+	return m.collapsedAlbums != nil && m.collapsedAlbums[albumIndex]
+}
+
+func (m *Model) toggleAlbum(albumIndex int) {
+	if m.collapsedAlbums == nil {
+		m.collapsedAlbums = map[int]bool{}
+	}
+
+	m.collapsedAlbums[albumIndex] = !m.collapsedAlbums[albumIndex]
+}
+
+func albumLine(title string, expanded, selected, focused bool, width int) string {
+	prefix := "> "
+	if expanded {
+		prefix = "v "
+	}
+
+	return styledLine(prefix, ui.Truncate(title, max(width-2, 1)), selected, focused, false, width)
+}
+
+func formatAlbumTitle(album navidrome.Album) string {
+	if album.Year > 0 {
+		return fmt.Sprintf("%s (%d)", album.Name, album.Year)
+	}
+
+	return album.Name
 }
 
 func (m Model) visibleSongRows(height int) int {

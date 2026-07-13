@@ -810,13 +810,13 @@ func TestArtistMainAreaRendersAlbumGroups(t *testing.T) {
 	m.artists = []navidrome.Artist{{ID: "artist-1", Name: "Aerosmith"}}
 	m.albums = []albumGroup{
 		{
-			album: navidrome.Album{ID: "album-1", Name: "Aerosmith"},
+			album: navidrome.Album{ID: "album-1", Name: "Aerosmith", Year: 1973},
 			songs: []navidrome.Song{
 				{ID: "song-1", Title: "Dream On", Duration: 268},
 			},
 		},
 		{
-			album: navidrome.Album{ID: "album-2", Name: "Toys in the Attic"},
+			album: navidrome.Album{ID: "album-2", Name: "Toys in the Attic", Year: 1975},
 			songs: []navidrome.Song{
 				{ID: "song-2", Title: "Sweet Emotion", Duration: 274},
 			},
@@ -828,7 +828,7 @@ func TestArtistMainAreaRendersAlbumGroups(t *testing.T) {
 	}
 
 	content := m.renderMainArea(80, 12)
-	for _, expected := range []string{"> Aerosmith", "Dream On", "> Toys in the Attic", "Sweet Emotion"} {
+	for _, expected := range []string{"v Aerosmith (1973)", "Dream On", "v Toys in the Attic (1975)", "Sweet Emotion"} {
 		if !strings.Contains(content, expected) {
 			t.Fatalf("expected %q in artist view, got:\n%s", expected, content)
 		}
@@ -862,11 +862,126 @@ func TestArtistSearchKeepsMatchingAlbumGroups(t *testing.T) {
 	}
 
 	content := m.renderMainArea(80, 12)
-	if !strings.Contains(content, "> Toys in the Attic") || !strings.Contains(content, "Sweet Emotion") {
+	if !strings.Contains(content, "v Toys in the Attic") || !strings.Contains(content, "Sweet Emotion") {
 		t.Fatalf("expected matching album group to render, got:\n%s", content)
 	}
-	if strings.Contains(content, "> Aerosmith") || strings.Contains(content, "Dream On") {
+	if strings.Contains(content, "v Aerosmith") || strings.Contains(content, "Dream On") {
 		t.Fatalf("expected non-matching album group to be hidden, got:\n%s", content)
+	}
+}
+
+func TestArtistNavigationSelectsAlbumRows(t *testing.T) {
+	m := artistAlbumModel()
+	m.focused = songsPane
+
+	updated, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	m = updated.(Model)
+	if m.selectedArtistRow != 1 {
+		t.Fatalf("expected first song row selected, got %d", m.selectedArtistRow)
+	}
+	if m.selectedSong != 0 {
+		t.Fatalf("expected first song selected, got %d", m.selectedSong)
+	}
+
+	updated, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	m = updated.(Model)
+	if m.selectedArtistRow != 2 {
+		t.Fatalf("expected second album row selected, got %d", m.selectedArtistRow)
+	}
+	if m.selectedSong != 0 {
+		t.Fatalf("expected selected song to stay on previous song for album row, got %d", m.selectedSong)
+	}
+}
+
+func TestEnterOnArtistAlbumTogglesCollapse(t *testing.T) {
+	m := artistAlbumModel()
+	m.focused = songsPane
+	m.selectedArtistRow = 2
+
+	updated, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = updated.(Model)
+
+	if cmd != nil {
+		t.Fatal("expected album activation to toggle without playing")
+	}
+	if !m.albumCollapsed(1) {
+		t.Fatal("expected album to collapse")
+	}
+	if m.selectedArtistRow != 2 {
+		t.Fatalf("expected album row to stay selected, got %d", m.selectedArtistRow)
+	}
+}
+
+func TestCollapsedArtistAlbumHidesSongs(t *testing.T) {
+	m := artistAlbumModel()
+	m.collapsedAlbums = map[int]bool{1: true}
+
+	content := m.renderMainArea(80, 12)
+	if !strings.Contains(content, "> Toys in the Attic (1975)") {
+		t.Fatalf("expected collapsed album marker, got:\n%s", content)
+	}
+	if strings.Contains(content, "Sweet Emotion") {
+		t.Fatalf("expected collapsed album songs to be hidden, got:\n%s", content)
+	}
+}
+
+func TestFormatAlbumTitleIncludesYearWhenPresent(t *testing.T) {
+	if got := formatAlbumTitle(navidrome.Album{Name: "Toys in the Attic", Year: 1975}); got != "Toys in the Attic (1975)" {
+		t.Fatalf("unexpected album title: %q", got)
+	}
+	if got := formatAlbumTitle(navidrome.Album{Name: "Aerosmith"}); got != "Aerosmith" {
+		t.Fatalf("unexpected album title without year: %q", got)
+	}
+}
+
+func TestArtistNavigationSkipsCollapsedAlbumSongs(t *testing.T) {
+	m := artistAlbumModel()
+	m.focused = songsPane
+	m.collapsedAlbums = map[int]bool{0: true}
+
+	updated, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	m = updated.(Model)
+
+	if m.selectedArtistRow != 1 {
+		t.Fatalf("expected second album row selected, got %d", m.selectedArtistRow)
+	}
+}
+
+func TestEnterOnArtistSongPlaysSong(t *testing.T) {
+	m := artistAlbumModel()
+	m.focused = songsPane
+	m.selectedArtistRow = 3
+
+	updated, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = updated.(Model)
+
+	if cmd == nil {
+		t.Fatal("expected song play command")
+	}
+	if m.selectedSong != 1 {
+		t.Fatalf("expected Sweet Emotion selected, got %d", m.selectedSong)
+	}
+}
+
+func TestAddArtistAlbumToQueue(t *testing.T) {
+	m := artistAlbumModel()
+	m.focused = songsPane
+	m.selectedArtistRow = 2
+
+	updated, cmd := m.Update(tea.KeyPressMsg{Code: 'a', Text: "a"})
+	m = updated.(Model)
+
+	if cmd == nil {
+		t.Fatal("expected save and toast command")
+	}
+	if len(m.queue) != 1 {
+		t.Fatalf("expected one album song queued, got %+v", m.queue)
+	}
+	if m.queue[0].ID != "song-2" {
+		t.Fatalf("expected Sweet Emotion queued, got %+v", m.queue)
+	}
+	if !strings.Contains(m.toast, "Added album to queue") {
+		t.Fatalf("expected album queue toast, got %q", m.toast)
 	}
 }
 
@@ -993,6 +1108,32 @@ func loadedModel() Model {
 		{ID: "song-3", Title: "Walk This Way", Artist: "Aerosmith", Album: "Toys in the Attic", Track: 4, Duration: 220},
 	}
 	m.loading = false
+
+	return m
+}
+
+func artistAlbumModel() Model {
+	m := loadedModel()
+	m.mode = artistsMode
+	m.artists = []navidrome.Artist{{ID: "artist-1", Name: "Aerosmith"}}
+	m.albums = []albumGroup{
+		{
+			album: navidrome.Album{ID: "album-1", Name: "Aerosmith", Year: 1973},
+			songs: []navidrome.Song{
+				{ID: "song-1", Title: "Dream On", Duration: 268},
+			},
+		},
+		{
+			album: navidrome.Album{ID: "album-2", Name: "Toys in the Attic", Year: 1975},
+			songs: []navidrome.Song{
+				{ID: "song-2", Title: "Sweet Emotion", Duration: 274},
+			},
+		},
+	}
+	m.songs = []navidrome.Song{
+		{ID: "song-1", Title: "Dream On", Duration: 268},
+		{ID: "song-2", Title: "Sweet Emotion", Duration: 274},
+	}
 
 	return m
 }

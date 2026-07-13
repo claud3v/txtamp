@@ -26,6 +26,13 @@ func (m *Model) addSelectedSongToQueue() bool {
 		return false
 	}
 
+	if songs, ok := m.selectedAlbumSongs(); ok {
+		m.queue = append(m.queue, songs...)
+		m.queueDirty = true
+		m.showToast(fmt.Sprintf("Added album to queue: %d songs", len(songs)))
+		return true
+	}
+
 	song, ok := m.selectedPlayableSong()
 	if !ok {
 		return false
@@ -56,8 +63,45 @@ func (m Model) selectedPlayableSong() (navidrome.Song, bool) {
 		return navidrome.Song{}, false
 	}
 
+	if m.mode == artistsMode {
+		rows := m.artistRows()
+		if len(rows) == 0 {
+			return navidrome.Song{}, false
+		}
+
+		row := rows[clamp(m.selectedArtistRow, 0, len(rows)-1)]
+		if row.songIndex < 0 {
+			return navidrome.Song{}, false
+		}
+
+		return m.songs[row.songIndex], true
+	}
+
 	index := clamp(m.selectedSong, 0, len(m.songs)-1)
 	return m.songs[index], true
+}
+
+func (m Model) selectedAlbumSongs() ([]navidrome.Song, bool) {
+	if m.contentMode != libraryContent || m.mode != artistsMode {
+		return nil, false
+	}
+
+	rows := m.artistRows()
+	if len(rows) == 0 {
+		return nil, false
+	}
+
+	row := rows[clamp(m.selectedArtistRow, 0, len(rows)-1)]
+	if row.songIndex >= 0 || row.albumIndex < 0 || row.albumIndex >= len(m.albums) {
+		return nil, false
+	}
+
+	songs := m.albums[row.albumIndex].songs
+	if len(songs) == 0 {
+		return nil, false
+	}
+
+	return append([]navidrome.Song(nil), songs...), true
 }
 
 func (m *Model) moveQueueSelection(delta int) {
