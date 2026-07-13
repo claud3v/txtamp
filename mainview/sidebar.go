@@ -67,6 +67,9 @@ func (m Model) sidebarItemCount() int {
 func (m Model) sidebarItems(width, height int) []string {
 	switch m.mode {
 	case artistsMode:
+		if m.err != nil {
+			return nil
+		}
 		if len(m.artists) == 0 && !m.loading {
 			return []string{ui.Subtitle.Render("No artists found")}
 		}
@@ -87,6 +90,9 @@ func (m Model) sidebarItems(width, height int) []string {
 
 		return lines
 	default:
+		if m.err != nil {
+			return nil
+		}
 		if len(m.playlists) == 0 && !m.loading {
 			return []string{ui.Subtitle.Render("No playlists found")}
 		}

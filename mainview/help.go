@@ -6,7 +6,7 @@ import (
 )
 
 func (m Model) renderStatusBar(width int) string {
-	text := "Arrows Navigate  Enter Open/Play  Space Play/Pause  / Filter  s Search  ? Help"
+	text := "Arrows Navigate  Enter Play  Space Play/Pause  a Add  q Queue  / Filter  s Search  ? Help"
 	return ui.StatusBar.
 		Width(width).
 		Render(ui.Truncate(text, max(width-4, 1)))

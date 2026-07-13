@@ -96,6 +96,14 @@ var (
 		BorderForeground(lipgloss.Color("#8BE9FD")).
 		Background(lipgloss.Color("#282A36"))
 
+	// Short-lived non-blocking notification.
+	Toast = lipgloss.NewStyle().
+		Padding(0, 2).
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("#50FA7B")).
+		Foreground(lipgloss.Color("#50FA7B")).
+		Background(lipgloss.Color("#282A36"))
+
 	// Focused pane title.
 	PaneTitleFocused = PaneTitle.Copy().
 				Underline(true)

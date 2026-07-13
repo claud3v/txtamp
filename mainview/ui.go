@@ -17,6 +17,7 @@ import (
 const (
 	loadTimeout  = 10 * time.Second
 	statusPeriod = 1 * time.Second
+	toastPeriod  = 2 * time.Second
 	restartLimit = 3
 )
 
@@ -40,6 +41,7 @@ type mainContentMode int
 const (
 	libraryContent mainContentMode = iota
 	globalSearchContent
+	queueContent
 )
 
 type albumGroup struct {
@@ -70,6 +72,7 @@ type Model struct {
 	globalSearchErr            error
 	globalSearchResult         navidrome.SearchResult
 	selectedSearchResult       int
+	selectedQueue              int
 	loadedPlaylistID           string
 	loadedArtistID             string
 	selectedPlaylist           int
@@ -83,11 +86,14 @@ type Model struct {
 	playbackID                 int
 	loading                    bool
 	err                        error
+	toast                      string
+	toastID                    int
 
 	playlists []navidrome.Playlist
 	artists   []navidrome.Artist
 	albums    []albumGroup
 	songs     []navidrome.Song
+	queue     []navidrome.Song
 }
 
 type playlistsLoadedMsg struct {
@@ -139,6 +145,10 @@ type playerStatusMsg struct {
 
 type playerTickMsg struct {
 	playbackID int
+}
+
+type clearToastMsg struct {
+	toastID int
 }
 
 func New(connectedTo string, client navidrome.Client) Model {
@@ -260,6 +270,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		return m, m.pollPlayerStatus()
+	case clearToastMsg:
+		if msg.toastID == m.toastID {
+			m.toast = ""
+		}
 	case playerStatusMsg:
 		if msg.playbackID != m.playbackID {
 			return m, nil
@@ -338,6 +352,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.contentMode == globalSearchContent {
 				m.contentMode = libraryContent
 				m.globalSearching = false
+			} else if m.contentMode == queueContent {
+				m.contentMode = libraryContent
 			} else {
 				m.clearSearch()
 			}
@@ -345,6 +361,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.startSearch()
 		case actionGlobalSearch:
 			m.startGlobalSearch()
+		case actionToggleQueue:
+			m.toggleQueue()
+		case actionAddToQueue:
+			if m.addSelectedSongToQueue() {
+				return m, clearToast(m.toastID)
+			}
+		case actionRemoveQueue:
+			m.removeSelectedQueueSong()
+		case actionQueueUp:
+			m.moveQueuedSong(-1)
+		case actionQueueDown:
+			m.moveQueuedSong(1)
 		case actionMoveUp:
 			cmd := m.moveSelection(-1)
 			return m, cmd
@@ -391,6 +419,9 @@ func (m Model) View() tea.View {
 	if m.helpOpen {
 		content = overlayCentered(content, m.renderHelpDialog(), layout.Width, layout.Height)
 	}
+	if m.toast != "" {
+		content = overlayBottomRight(content, m.renderToast(), layout.Width, layout.Height)
+	}
 
 	view := tea.NewView(content)
 	view.AltScreen = true
@@ -404,6 +435,20 @@ func overlayCentered(content, overlay string, width, height int) string {
 	left := max((width-overlayWidth)/2, 0)
 	top := max((height-overlayHeight)/2, 0)
 
+	return overlayAt(content, overlay, width, height, left, top)
+}
+
+func overlayBottomRight(content, overlay string, width, height int) string {
+	overlayWidth := lipgloss.Width(overlay)
+	overlayHeight := lipgloss.Height(overlay)
+	left := max(width-overlayWidth-2, 0)
+	top := max(height-overlayHeight-4, 0)
+
+	return overlayAt(content, overlay, width, height, left, top)
+}
+
+func overlayAt(content, overlay string, width, height, left, top int) string {
+	overlayWidth := lipgloss.Width(overlay)
 	contentLines := strings.Split(content, "\n")
 	overlayLines := strings.Split(overlay, "\n")
 	for len(contentLines) < height {
@@ -430,6 +475,12 @@ func overlayCentered(content, overlay string, width, height int) string {
 	}
 
 	return strings.Join(contentLines, "\n")
+}
+
+func clearToast(toastID int) tea.Cmd {
+	return tea.Tick(toastPeriod, func(t time.Time) tea.Msg {
+		return clearToastMsg{toastID: toastID}
+	})
 }
 
 func (m Model) renderModeDialog() string {
@@ -459,6 +510,10 @@ func modeDialogRow(label, key string, selected bool, width int) string {
 func (m *Model) moveSelection(delta int) tea.Cmd {
 	if m.contentMode == globalSearchContent && m.focused == songsPane {
 		m.moveGlobalSearchSelection(delta)
+		return nil
+	}
+	if m.contentMode == queueContent && m.focused == songsPane {
+		m.moveQueueSelection(delta)
 		return nil
 	}
 
@@ -496,6 +551,9 @@ func (m *Model) activateSelection() tea.Cmd {
 
 	if m.contentMode == globalSearchContent && m.focused == songsPane {
 		return m.activateGlobalSearchResult()
+	}
+	if m.contentMode == queueContent && m.focused == songsPane {
+		return m.playSelectedQueueSong()
 	}
 
 	if m.focused == playlistsPane {
@@ -779,6 +837,10 @@ func (m *Model) playSongAtIndex(song navidrome.Song, index int) tea.Cmd {
 }
 
 func (m *Model) playNextSong() tea.Cmd {
+	if len(m.queue) > 0 {
+		return m.consumeQueuedSongAt(0)
+	}
+
 	if len(m.songs) == 0 {
 		return nil
 	}

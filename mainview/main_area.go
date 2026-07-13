@@ -19,6 +19,10 @@ type renderedSearchRow struct {
 }
 
 func (m Model) renderMainArea(width, height int) string {
+	if m.contentMode == queueContent {
+		return m.renderQueue(width, height)
+	}
+
 	if m.contentMode == globalSearchContent {
 		return m.renderGlobalSearch(width, height)
 	}

@@ -1,6 +1,7 @@
 package mainview
 
 import (
+	"errors"
 	"strings"
 	"testing"
 	"txtamp/navidrome"
@@ -41,6 +42,19 @@ func TestSongNavigation(t *testing.T) {
 	}
 	if m.selectedSong != 1 {
 		t.Fatalf("expected second song to be selected, got %d", m.selectedSong)
+	}
+}
+
+func TestSidebarDoesNotShowEmptyStateWhenLoadFailed(t *testing.T) {
+	m := loadedModel()
+	m.playlists = nil
+	m.songs = nil
+	m.err = errors.New("sending request: context deadline exceeded")
+	m.loading = false
+
+	content := m.renderSidebar(32, 18)
+	if strings.Contains(content, "No playlists found") {
+		t.Fatalf("expected sidebar not to show empty state on error, got:\n%s", content)
 	}
 }
 
