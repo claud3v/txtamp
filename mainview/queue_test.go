@@ -65,6 +65,59 @@ func TestRemoveSelectedQueueSong(t *testing.T) {
 	if m.queue[0].ID != "song-2" {
 		t.Fatalf("expected Sweet Emotion to remain, got %+v", m.queue[0])
 	}
+	if !strings.Contains(m.toast, "Dream On") {
+		t.Fatalf("expected removal toast to name song, got %q", m.toast)
+	}
+}
+
+func TestClearQueue(t *testing.T) {
+	m := loadedModel()
+	m.queue = []navidrome.Song{m.songs[0], m.songs[1]}
+	m.selectedQueue = 1
+
+	updated, cmd := m.Update(tea.KeyPressMsg{Code: 'c', Text: "c"})
+	m = updated.(Model)
+
+	if cmd == nil {
+		t.Fatal("expected save and toast command")
+	}
+	if len(m.queue) != 0 {
+		t.Fatalf("expected queue to clear, got %+v", m.queue)
+	}
+	if m.selectedQueue != 0 {
+		t.Fatalf("expected selected queue to reset, got %d", m.selectedQueue)
+	}
+	if !m.queueDirty {
+		t.Fatal("expected queue to be marked dirty")
+	}
+	if !strings.Contains(m.toast, "Queue cleared") {
+		t.Fatalf("expected queue clear toast, got %q", m.toast)
+	}
+}
+
+func TestPlayQueueFromTopConsumesFirstSong(t *testing.T) {
+	m := loadedModel()
+	m.queue = []navidrome.Song{m.songs[0], m.songs[1]}
+	m.selectedQueue = 1
+
+	updated, cmd := m.Update(tea.KeyPressMsg{Code: 'P', Text: "P"})
+	m = updated.(Model)
+
+	if cmd == nil {
+		t.Fatal("expected play command")
+	}
+	if len(m.queue) != 1 {
+		t.Fatalf("expected first queued song to be consumed, got %+v", m.queue)
+	}
+	if m.queue[0].ID != "song-2" {
+		t.Fatalf("expected second song to remain queued, got %+v", m.queue)
+	}
+	if m.playbackID != 1 {
+		t.Fatalf("expected playback id to increment, got %d", m.playbackID)
+	}
+	if !strings.Contains(m.toast, "Playing queue") {
+		t.Fatalf("expected playing queue toast, got %q", m.toast)
+	}
 }
 
 func TestMoveQueuedSong(t *testing.T) {
@@ -205,5 +258,15 @@ func TestViewOverlaysToast(t *testing.T) {
 	}
 	if !strings.Contains(view.Content, "Dream On") {
 		t.Fatalf("expected toast to overlay existing content, got:\n%s", view.Content)
+	}
+}
+
+func TestStatusBarShowsQueueCount(t *testing.T) {
+	m := loadedModel()
+	m.queue = []navidrome.Song{m.songs[0], m.songs[1]}
+
+	content := m.renderStatusBar(100)
+	if !strings.Contains(content, "Queue 2") {
+		t.Fatalf("expected queue count in status bar, got:\n%s", content)
 	}
 }

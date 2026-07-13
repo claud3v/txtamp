@@ -15,6 +15,8 @@ const (
 	actionAddToQueue    action = "add_to_queue"
 	actionToggleQueue   action = "toggle_queue"
 	actionRemoveQueue   action = "remove_queue"
+	actionClearQueue    action = "clear_queue"
+	actionPlayQueue     action = "play_queue"
 	actionQueueUp       action = "queue_up"
 	actionQueueDown     action = "queue_down"
 	actionShowArtists   action = "show_artists"
@@ -42,6 +44,8 @@ var defaultKeyBindings = []keyBinding{
 	{Key: "a", Action: actionAddToQueue, Description: "Add selected song to queue"},
 	{Key: "q", Action: actionToggleQueue, Description: "Show queue"},
 	{Key: "d", Action: actionRemoveQueue, Description: "Remove queued song"},
+	{Key: "c", Action: actionClearQueue, Description: "Clear queue"},
+	{Key: "P", Action: actionPlayQueue, Description: "Play queue from top"},
 	{Key: "J", Action: actionQueueDown, Description: "Move queued song down"},
 	{Key: "K", Action: actionQueueUp, Description: "Move queued song up"},
 	{Key: "1", Action: actionShowArtists, Description: "Show artists"},

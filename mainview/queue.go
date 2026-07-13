@@ -73,8 +73,32 @@ func (m *Model) removeSelectedQueueSong() bool {
 		return false
 	}
 
+	removed := m.queue[clamp(m.selectedQueue, 0, len(m.queue)-1)]
 	m.removeQueueSongAt(m.selectedQueue)
+	m.showToast("Removed from queue: " + removed.Title)
 	return true
+}
+
+func (m *Model) clearQueue() bool {
+	if len(m.queue) == 0 {
+		return false
+	}
+
+	m.queue = nil
+	m.selectedQueue = 0
+	m.queueDirty = true
+	m.showToast("Queue cleared")
+	return true
+}
+
+func (m *Model) playQueueFromTop() tea.Cmd {
+	if len(m.queue) == 0 {
+		return nil
+	}
+
+	m.selectedQueue = 0
+	m.showToast("Playing queue")
+	return tea.Batch(m.consumeQueuedSongAt(0), clearToast(m.toastID))
 }
 
 func (m *Model) moveQueuedSong(delta int) bool {

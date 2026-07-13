@@ -19,6 +19,8 @@ func TestActionForKey(t *testing.T) {
 		{key: "a", expectedAction: actionAddToQueue, found: true},
 		{key: "q", expectedAction: actionToggleQueue, found: true},
 		{key: "d", expectedAction: actionRemoveQueue, found: true},
+		{key: "c", expectedAction: actionClearQueue, found: true},
+		{key: "P", expectedAction: actionPlayQueue, found: true},
 		{key: "J", expectedAction: actionQueueDown, found: true},
 		{key: "K", expectedAction: actionQueueUp, found: true},
 		{key: "?", expectedAction: actionToggleHelp, found: true},

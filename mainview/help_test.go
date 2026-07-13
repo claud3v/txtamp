@@ -88,7 +88,7 @@ func TestViewOverlaysHelp(t *testing.T) {
 	if !strings.Contains(view.Content, "Shortcuts") {
 		t.Fatalf("expected help overlay, got:\n%s", view.Content)
 	}
-	if !strings.Contains(view.Content, "? Help") {
+	if !strings.Contains(view.Content, "Queue 0") {
 		t.Fatalf("expected status bar behind help, got:\n%s", view.Content)
 	}
 }

@@ -1,12 +1,13 @@
 package mainview
 
 import (
+	"fmt"
 	"strings"
 	"txtamp/ui"
 )
 
 func (m Model) renderStatusBar(width int) string {
-	text := "Arrows Navigate  Enter Play  Space Play/Pause  a Add  q Queue  / Filter  s Search  ? Help"
+	text := fmt.Sprintf("Queue %d  Arrows Navigate  Enter Play  Space Play/Pause  a Add  q Queue  ? Help", len(m.queue))
 	return ui.StatusBar.
 		Width(width).
 		Render(ui.Truncate(text, max(width-4, 1)))

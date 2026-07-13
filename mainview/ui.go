@@ -396,6 +396,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.removeSelectedQueueSong() {
 				return m, m.saveQueue()
 			}
+		case actionClearQueue:
+			if m.clearQueue() {
+				return m, tea.Batch(clearToast(m.toastID), m.saveQueue())
+			}
+		case actionPlayQueue:
+			cmd := m.playQueueFromTop()
+			if cmd != nil {
+				return m, cmd
+			}
 		case actionQueueUp:
 			if m.moveQueuedSong(-1) {
 				return m, m.saveQueue()
