@@ -3,15 +3,15 @@ package ui
 import "github.com/charmbracelet/lipgloss"
 
 var (
-	ColorBackground = lipgloss.Color("#282A36")
-	ColorText       = lipgloss.Color("#F8F8F2")
-	ColorMuted      = lipgloss.Color("#7F8C8D")
-	ColorBorder     = lipgloss.Color("#3A3F4B")
-	ColorAccent     = lipgloss.Color("#8BE9FD")
-	ColorPlaying    = lipgloss.Color("#50FA7B")
-	ColorError      = lipgloss.Color("#FF5555")
-	ColorSelectedFg = ColorBackground
-	ColorSelectedBg = ColorAccent
+	ColorBackground = DefaultTheme.Background
+	ColorText       = DefaultTheme.Text
+	ColorMuted      = DefaultTheme.Muted
+	ColorBorder     = DefaultTheme.Border
+	ColorAccent     = DefaultTheme.Accent
+	ColorPlaying    = DefaultTheme.Playing
+	ColorError      = DefaultTheme.Error
+	ColorSelectedFg = DefaultTheme.SelectedFg
+	ColorSelectedBg = DefaultTheme.SelectedBg
 
 	// Application title.
 	Title = lipgloss.NewStyle().
