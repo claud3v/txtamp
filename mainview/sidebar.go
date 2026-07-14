@@ -3,9 +3,15 @@ package mainview
 import (
 	"strings"
 	"txtamp/ui"
+	"unicode"
 
 	"github.com/charmbracelet/lipgloss"
 )
+
+type artistSidebarRow struct {
+	header string
+	artist indexedArtist
+}
 
 func (m Model) renderSidebar(width, height int) string {
 	lines := []string{
@@ -79,12 +85,19 @@ func (m Model) sidebarItems(width, height int) []string {
 			return []string{ui.Subtitle.Render("No matches")}
 		}
 
-		selected := m.selectedArtistPosition(artists)
-		start, end := visibleRange(selected, len(artists), m.visibleSidebarRows(height))
+		rows := artistSidebarRows(artists)
+		selected := selectedArtistSidebarRow(rows, m.selectedArtist)
+		start, end := visibleRange(selected, len(rows), m.visibleSidebarRows(height))
+		start, end = artistSidebarVisibleRange(rows, start, end, m.visibleSidebarRows(height))
 		lines := make([]string, 0, end-start)
 		for i := start; i < end; i++ {
-			artist := artists[i]
-			line := selectableLine(artist.artist.Name, artist.index == m.selectedArtist, m.focused == playlistsPane, width)
+			row := rows[i]
+			if row.header != "" {
+				lines = append(lines, artistGroupHeader(row.header, width))
+				continue
+			}
+
+			line := m.sidebarSelectableLine(row.artist.artist.Name, row.artist.index == m.selectedArtist, width)
 			lines = append(lines, line)
 		}
 
@@ -107,7 +120,7 @@ func (m Model) sidebarItems(width, height int) []string {
 		lines := make([]string, 0, end-start)
 		for i := start; i < end; i++ {
 			playlist := playlists[i]
-			line := selectableLine(playlist.playlist.Name, playlist.index == m.selectedPlaylist, m.focused == playlistsPane, width)
+			line := m.sidebarSelectableLine(playlist.playlist.Name, playlist.index == m.selectedPlaylist, width)
 			lines = append(lines, line)
 		}
 
@@ -121,4 +134,121 @@ func (m Model) visibleSidebarRows(height int) int {
 	}
 
 	return max(height-8, 1)
+}
+
+func artistSidebarRows(artists []indexedArtist) []artistSidebarRow {
+	rows := make([]artistSidebarRow, 0, len(artists))
+	lastGroup := ""
+	for _, artist := range artists {
+		group := artistGroup(artist.artist.Name)
+		if group != lastGroup {
+			rows = append(rows, artistSidebarRow{header: group})
+			lastGroup = group
+		}
+		rows = append(rows, artistSidebarRow{artist: artist})
+	}
+
+	return rows
+}
+
+func artistGroup(name string) string {
+	for _, r := range strings.TrimSpace(name) {
+		r = unicode.ToUpper(r)
+		if r >= 'A' && r <= 'Z' {
+			return string(r)
+		}
+		return "#"
+	}
+
+	return "#"
+}
+
+func selectedArtistSidebarRow(rows []artistSidebarRow, selectedArtist int) int {
+	for i, row := range rows {
+		if row.header == "" && row.artist.index == selectedArtist {
+			return i
+		}
+	}
+
+	return 0
+}
+
+func artistSidebarVisibleRange(rows []artistSidebarRow, start, end, height int) (int, int) {
+	if start <= 0 || start >= len(rows) || rows[start].header != "" {
+		return start, end
+	}
+
+	header := start - 1
+	for header >= 0 && rows[header].header == "" {
+		header--
+	}
+	if header < 0 {
+		return start, end
+	}
+
+	start = header
+	end = min(start+height, len(rows))
+	return start, end
+}
+
+func artistGroupHeader(group string, width int) string {
+	line := group + " " + strings.Repeat("-", max(width-len(group)-1, 0))
+	return ui.AlbumCollapsed.Width(width).Render(ui.Truncate(line, width))
+}
+
+func (m Model) sidebarSelectableLine(text string, selected bool, width int) string {
+	displayText := text
+	if selected && m.focused == playlistsPane {
+		displayText = marqueeText(text, max(width-2, 1), m.sidebarMarqueeOffset)
+	}
+
+	return selectableLine(displayText, selected, m.focused == playlistsPane, width)
+}
+
+func (m Model) sidebarMarqueeActive() bool {
+	if m.focused != playlistsPane || m.searching || m.modeDialogOpen || m.helpOpen {
+		return false
+	}
+
+	text, ok := m.selectedSidebarText()
+	if !ok {
+		return false
+	}
+
+	layout := ui.NewShellLayout(m.width, m.height)
+	return len([]rune(text)) > max(layout.SidebarWidth-6, 1)
+}
+
+func (m Model) selectedSidebarText() (string, bool) {
+	switch m.mode {
+	case artistsMode:
+		if len(m.artists) == 0 {
+			return "", false
+		}
+		artist := m.artists[clamp(m.selectedArtist, 0, len(m.artists)-1)]
+		return artist.Name, true
+	default:
+		if len(m.playlists) == 0 {
+			return "", false
+		}
+		playlist := m.playlists[clamp(m.selectedPlaylist, 0, len(m.playlists)-1)]
+		return playlist.Name, true
+	}
+}
+
+func marqueeText(text string, width, offset int) string {
+	runes := []rune(text)
+	if width <= 0 || len(runes) <= width {
+		return text
+	}
+
+	padding := []rune("   ")
+	loop := append(append([]rune{}, runes...), padding...)
+	loop = append(loop, runes...)
+	cycleLength := len(runes) + len(padding) + marqueePauseTicks
+	position := offset % cycleLength
+	start := max(position-marqueePauseTicks, 0)
+	window := loop[start : start+width]
+
+	return string(window)
 }

@@ -691,6 +691,117 @@ func TestSearchFiltersSidebarAndSelectsOriginalPlaylist(t *testing.T) {
 	}
 }
 
+func TestArtistSidebarGroupsByLetter(t *testing.T) {
+	m := loadedModel()
+	m.mode = artistsMode
+	m.artists = []navidrome.Artist{
+		{ID: "artist-1", Name: "AC/DC"},
+		{ID: "artist-2", Name: "Aerosmith"},
+		{ID: "artist-3", Name: "Black Sabbath"},
+	}
+
+	content := m.renderSidebar(36, 20)
+	for _, expected := range []string{"A -", "AC/DC", "Aerosmith", "B -", "Black Sabbath"} {
+		if !strings.Contains(content, expected) {
+			t.Fatalf("expected %q in grouped artist sidebar, got:\n%s", expected, content)
+		}
+	}
+}
+
+func TestArtistSidebarScrollsSelectedArtistIntoViewWithGroups(t *testing.T) {
+	m := loadedModel()
+	m.mode = artistsMode
+	m.selectedArtist = 4
+	m.artists = []navidrome.Artist{
+		{ID: "artist-1", Name: "AC/DC"},
+		{ID: "artist-2", Name: "Aerosmith"},
+		{ID: "artist-3", Name: "Black Sabbath"},
+		{ID: "artist-4", Name: "Cream"},
+		{ID: "artist-5", Name: "Dio"},
+	}
+
+	content := m.renderSidebar(36, 12)
+	if !strings.Contains(content, "> Dio") {
+		t.Fatalf("expected selected artist to stay visible, got:\n%s", content)
+	}
+}
+
+func TestArtistSidebarStartsAtGroupHeaderWhenScrolledIntoGroup(t *testing.T) {
+	m := loadedModel()
+	m.mode = artistsMode
+	m.selectedArtist = 4
+	m.artists = []navidrome.Artist{
+		{ID: "artist-1", Name: "AC/DC"},
+		{ID: "artist-2", Name: "Aerosmith"},
+		{ID: "artist-3", Name: "Black Sabbath"},
+		{ID: "artist-4", Name: "Derek & The Dominos"},
+		{ID: "artist-5", Name: "Eclipse"},
+		{ID: "artist-6", Name: "Ed Sheeran"},
+		{ID: "artist-7", Name: "Eric Clapton"},
+	}
+
+	content := m.renderSidebar(36, 12)
+	if strings.Contains(content, "Derek & The Dominos") && !strings.Contains(content, "D -") {
+		t.Fatalf("expected visible artist group to include its header, got:\n%s", content)
+	}
+	if !strings.Contains(content, "E -") {
+		t.Fatalf("expected selected artist group header, got:\n%s", content)
+	}
+}
+
+func TestSelectedArtistMarqueesWhenFocused(t *testing.T) {
+	m := loadedModel()
+	m.mode = artistsMode
+	m.focused = playlistsPane
+	m.sidebarMarqueeOffset = 5
+	m.artists = []navidrome.Artist{
+		{ID: "artist-1", Name: "Eric Clapton & B.B. King"},
+	}
+
+	content := m.renderSidebar(24, 14)
+	if strings.Contains(content, "Eric Clapton & B.B.") {
+		t.Fatalf("expected selected long artist to scroll, got:\n%s", content)
+	}
+	if !strings.Contains(content, "Clapton") {
+		t.Fatalf("expected marquee window to include artist text, got:\n%s", content)
+	}
+}
+
+func TestSidebarSelectionChangeRestartsMarqueeTick(t *testing.T) {
+	m := loadedModel()
+	m.mode = artistsMode
+	m.focused = playlistsPane
+	m.artists = []navidrome.Artist{
+		{ID: "artist-1", Name: "AC/DC"},
+		{ID: "artist-2", Name: "Eric Clapton & B.B. King"},
+	}
+
+	updated, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	m = updated.(Model)
+
+	if cmd == nil {
+		t.Fatal("expected artist load and marquee tick command")
+	}
+	if m.sidebarMarqueeOffset != 0 {
+		t.Fatalf("expected marquee offset to reset, got %d", m.sidebarMarqueeOffset)
+	}
+}
+
+func TestMarqueeTextLoops(t *testing.T) {
+	if got := marqueeText("abcdef", 3, 0); got != "abc" {
+		t.Fatalf("expected abc, got %q", got)
+	}
+	if got := marqueeText("abcdef", 3, marqueePauseTicks-1); got != "abc" {
+		t.Fatalf("expected pause at start, got %q", got)
+	}
+	if got := marqueeText("abcdef", 3, marqueePauseTicks+2); got != "cde" {
+		t.Fatalf("expected cde, got %q", got)
+	}
+	if got := marqueeText("abcdef", 3, marqueePauseTicks+7); got != "  a" {
+		t.Fatalf("expected wrapped text, got %q", got)
+	}
+}
+
 func TestSearchFiltersSongsAndKeepsOriginalSongIndex(t *testing.T) {
 	m := loadedModel()
 	m.focused = songsPane

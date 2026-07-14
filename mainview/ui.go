@@ -17,12 +17,14 @@ import (
 )
 
 const (
-	loadTimeout  = 10 * time.Second
-	statusPeriod = 1 * time.Second
-	toastPeriod  = 2 * time.Second
-	restartLimit = 3
-	seekStep     = 10
-	volumeStep   = 5
+	loadTimeout       = 10 * time.Second
+	statusPeriod      = 1 * time.Second
+	toastPeriod       = 2 * time.Second
+	marqueePeriod     = 250 * time.Millisecond
+	marqueePauseTicks = 3
+	restartLimit      = 3
+	seekStep          = 10
+	volumeStep        = 5
 )
 
 type focusPane int
@@ -96,6 +98,7 @@ type Model struct {
 	err                        error
 	toast                      string
 	toastID                    int
+	sidebarMarqueeOffset       int
 	queueDirty                 bool
 
 	playlists []navidrome.Playlist
@@ -179,6 +182,8 @@ type queueSavedMsg struct {
 	err error
 }
 
+type sidebarMarqueeTickMsg struct{}
+
 func New(connectedTo string, client navidrome.Client) Model {
 	return Model{
 		connectedTo: connectedTo,
@@ -191,7 +196,7 @@ func New(connectedTo string, client navidrome.Client) Model {
 }
 
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(m.loadPlaylists(), loadSavedQueue())
+	return tea.Batch(m.loadPlaylists(), loadSavedQueue(), tickSidebarMarquee())
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -329,6 +334,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			m.err = msg.err
 		}
+	case sidebarMarqueeTickMsg:
+		if m.sidebarMarqueeActive() {
+			m.sidebarMarqueeOffset++
+			return m, tickSidebarMarquee()
+		}
+		m.sidebarMarqueeOffset = 0
 	case playerStatusMsg:
 		if msg.playbackID != m.playbackID {
 			return m, nil
@@ -401,8 +412,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch action {
 		case actionFocusSidebar:
 			m.focused = playlistsPane
+			m.sidebarMarqueeOffset = 0
+			return m, tickSidebarMarquee()
 		case actionFocusMainArea:
 			m.focused = songsPane
+			m.sidebarMarqueeOffset = 0
 		case actionCloseDialog:
 			if m.contentMode == globalSearchContent {
 				m.contentMode = libraryContent
@@ -628,10 +642,13 @@ func (m *Model) moveSelection(delta int) tea.Cmd {
 	case modeSelectorPane:
 		if delta > 0 {
 			m.focused = playlistsPane
+			m.sidebarMarqueeOffset = 0
+			return tickSidebarMarquee()
 		}
 	case playlistsPane:
 		if delta < 0 && m.selectedSidebarPosition() == 0 {
 			m.focused = modeSelectorPane
+			m.sidebarMarqueeOffset = 0
 			return nil
 		}
 
@@ -670,6 +687,7 @@ func (m *Model) activateSelection() tea.Cmd {
 
 	if m.focused == playlistsPane {
 		m.focused = songsPane
+		m.sidebarMarqueeOffset = 0
 		m.selectedSong = 0
 		if m.selectedSidebarItemLoaded() {
 			return nil
@@ -743,7 +761,8 @@ func (m *Model) moveSidebarSelection(delta int) tea.Cmd {
 		m.selectedPlaylist = playlists[position].index
 		m.selectedSong = 0
 		if m.selectedPlaylist != previous {
-			return m.loadSelectedPlaylist()
+			m.sidebarMarqueeOffset = 0
+			return tea.Batch(m.loadSelectedPlaylist(), tickSidebarMarquee())
 		}
 	case artistsMode:
 		artists := m.filteredArtists()
@@ -759,7 +778,8 @@ func (m *Model) moveSidebarSelection(delta int) tea.Cmd {
 		m.collapsedAlbums = nil
 		m.selectedSong = 0
 		if m.selectedArtist != previous {
-			return m.loadSelectedArtist()
+			m.sidebarMarqueeOffset = 0
+			return tea.Batch(m.loadSelectedArtist(), tickSidebarMarquee())
 		}
 	}
 
@@ -773,6 +793,7 @@ func (m *Model) switchMode(mode sidebarMode) tea.Cmd {
 
 	m.mode = mode
 	m.focused = playlistsPane
+	m.sidebarMarqueeOffset = 0
 	m.selectedSong = 0
 	m.songs = nil
 	m.albums = nil
@@ -782,16 +803,16 @@ func (m *Model) switchMode(mode sidebarMode) tea.Cmd {
 	switch mode {
 	case playlistsMode:
 		if len(m.playlists) == 0 {
-			return m.loadPlaylists()
+			return tea.Batch(m.loadPlaylists(), tickSidebarMarquee())
 		}
 
-		return m.loadSelectedSidebarItem()
+		return tea.Batch(m.loadSelectedSidebarItem(), tickSidebarMarquee())
 	case artistsMode:
 		if len(m.artists) == 0 {
-			return m.loadArtists()
+			return tea.Batch(m.loadArtists(), tickSidebarMarquee())
 		}
 
-		return m.loadSelectedSidebarItem()
+		return tea.Batch(m.loadSelectedSidebarItem(), tickSidebarMarquee())
 	default:
 		return nil
 	}
@@ -1137,6 +1158,12 @@ func (m *Model) pollPlayerStatus() tea.Cmd {
 func tickPlayerStatus(playbackID int) tea.Cmd {
 	return tea.Tick(statusPeriod, func(t time.Time) tea.Msg {
 		return playerTickMsg{playbackID: playbackID}
+	})
+}
+
+func tickSidebarMarquee() tea.Cmd {
+	return tea.Tick(marqueePeriod, func(t time.Time) tea.Msg {
+		return sidebarMarqueeTickMsg{}
 	})
 }
 
