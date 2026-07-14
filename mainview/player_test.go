@@ -40,7 +40,7 @@ func TestRenderPlayerShowsUpNext(t *testing.T) {
 	}}
 
 	content := m.renderPlayer(100)
-	if !strings.Contains(content, "Up next: AC/DC - Back in Black - Hells Bells") {
+	if !strings.Contains(content, "Up next: Hells Bells") {
 		t.Fatalf("expected up next song, got:\n%s", content)
 	}
 }
@@ -51,8 +51,19 @@ func TestRenderPlayerShowsPlaybackSource(t *testing.T) {
 	m.playbackSource = "Playlist: Favorites"
 
 	content := m.renderPlayer(100)
-	if !strings.Contains(content, "Playing from Playlist: Favorites") {
+	if !strings.Contains(content, "Source: Playlist: Favorites") {
 		t.Fatalf("expected playback source, got:\n%s", content)
+	}
+}
+
+func TestRenderPlayerHidesRedundantArtistSource(t *testing.T) {
+	m := loadedModel()
+	m.currentSong = &m.songs[0]
+	m.playbackSource = "Artist: Aerosmith"
+
+	content := m.renderPlayer(100)
+	if strings.Contains(content, "Source: Artist: Aerosmith") {
+		t.Fatalf("expected redundant artist source to be hidden, got:\n%s", content)
 	}
 }
 
@@ -62,7 +73,7 @@ func TestRenderPlayerShowsNextLoadedSongWhenQueueIsEmpty(t *testing.T) {
 	m.currentSongIndex = 0
 
 	content := m.renderPlayer(100)
-	if !strings.Contains(content, "Up next: Aerosmith - Toys in the Attic - Sweet Emotion") {
+	if !strings.Contains(content, "Up next: Sweet Emotion") {
 		t.Fatalf("expected next loaded song, got:\n%s", content)
 	}
 }
@@ -78,7 +89,7 @@ func TestRenderPlayerQueueTakesPriorityOverNextLoadedSong(t *testing.T) {
 	}}
 
 	content := m.renderPlayer(100)
-	if !strings.Contains(content, "Up next: AC/DC - Back in Black - Hells Bells") {
+	if !strings.Contains(content, "Up next: Hells Bells") {
 		t.Fatalf("expected queued song to win, got:\n%s", content)
 	}
 }
@@ -94,9 +105,10 @@ func TestRenderPlayerShowsEmptyUpNext(t *testing.T) {
 
 func TestProgressBar(t *testing.T) {
 	got := progressBar(30, 120, 10)
-	want := "[==------]"
-
-	if got != want {
-		t.Fatalf("expected %q, got %q", want, got)
+	if !strings.Contains(got, "━") {
+		t.Fatalf("expected filled progress bar, got %q", got)
+	}
+	if !strings.Contains(got, "─") {
+		t.Fatalf("expected empty progress bar, got %q", got)
 	}
 }

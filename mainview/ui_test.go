@@ -1137,7 +1137,7 @@ func TestUpNextUsesPlaybackContextAfterVisibleSongsChange(t *testing.T) {
 		{ID: "other-2", Title: "Other Second", Duration: 100},
 	}
 
-	if got := m.upNextText(); got != "Aerosmith - Toys in the Attic - Sweet Emotion" {
+	if got := m.upNextText(); got != "Sweet Emotion" {
 		t.Fatalf("expected up next from original playback context, got %q", got)
 	}
 }

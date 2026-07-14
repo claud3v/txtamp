@@ -28,7 +28,7 @@ func NewShellLayout(width, height int) ShellLayout {
 	return ShellLayout{
 		Width:        contentWidth,
 		Height:       contentHeight,
-		BodyHeight:   max(contentHeight-7, 8),
+		BodyHeight:   max(contentHeight-8, 8),
 		SidebarWidth: sidebarWidth,
 		MainWidth:    max(contentWidth-sidebarWidth-1, 30),
 	}
