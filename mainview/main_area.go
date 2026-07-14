@@ -55,14 +55,14 @@ func (m Model) renderSongs(width, height int) string {
 	if m.err != nil {
 		lines = append(lines, ui.Error.Render(m.err.Error()))
 	} else if m.loading && len(m.songs) == 0 {
-		lines = append(lines, ui.Subtitle.Render("Loading..."))
+		lines = append(lines, emptyState("Loading..."))
 	} else if len(m.playlists) == 0 {
-		lines = append(lines, ui.Subtitle.Render("No playlists found"))
+		lines = append(lines, emptyState("No playlists found"))
 	}
 
 	songs := m.filteredSongs()
 	if len(songs) == 0 && m.filterQueryFor(songsPane) != "" {
-		lines = append(lines, ui.Subtitle.Render("No matches"))
+		lines = append(lines, emptyState("No matches"))
 	}
 
 	selected := m.selectedSongPosition(songs)
@@ -94,13 +94,13 @@ func (m Model) renderGlobalSearch(width, height int) string {
 	if m.globalSearchErr != nil {
 		lines = append(lines, ui.Error.Render(m.globalSearchErr.Error()))
 	} else if m.globalSearchLoading {
-		lines = append(lines, ui.Subtitle.Render("Searching..."))
+		lines = append(lines, emptyState("Searching..."))
 	} else if m.globalSearching && strings.TrimSpace(m.globalSearchQuery) != "" {
-		lines = append(lines, ui.Subtitle.Render("Press enter to search"))
+		lines = append(lines, emptyState("Press enter to search"))
 	} else if strings.TrimSpace(m.globalSearchQuery) == "" {
-		lines = append(lines, ui.Subtitle.Render("Type a query and press enter"))
+		lines = append(lines, emptyState("Type a query and press enter"))
 	} else if m.globalSearchSubmittedQuery != "" && m.globalSearchResultCount() == 0 {
-		lines = append(lines, ui.Subtitle.Render("No matches"))
+		lines = append(lines, emptyState("No matches"))
 	}
 
 	rows := m.renderGlobalSearchRows(width - 4)
@@ -122,7 +122,7 @@ func (m Model) renderGlobalSearchRows(width int) []renderedSearchRow {
 	resultIndex := 0
 
 	if len(m.globalSearchResult.Artists) > 0 {
-		rows = append(rows, renderedSearchRow{text: ui.PaneTitle.Render("Artists"), resultIndex: -1})
+		rows = append(rows, renderedSearchRow{text: sectionHeader("Artists"), resultIndex: -1})
 		for _, artist := range m.globalSearchResult.Artists {
 			rows = append(rows, renderedSearchRow{
 				text:        selectableLine(artist.Name, resultIndex == m.selectedSearchResult, m.focused == songsPane, width),
@@ -136,7 +136,7 @@ func (m Model) renderGlobalSearchRows(width int) []renderedSearchRow {
 		if len(rows) > 0 {
 			rows = append(rows, renderedSearchRow{text: "", resultIndex: -1})
 		}
-		rows = append(rows, renderedSearchRow{text: ui.PaneTitle.Render("Albums"), resultIndex: -1})
+		rows = append(rows, renderedSearchRow{text: sectionHeader("Albums"), resultIndex: -1})
 		for _, album := range m.globalSearchResult.Albums {
 			text := album.Name
 			if album.Artist != "" {
@@ -154,7 +154,7 @@ func (m Model) renderGlobalSearchRows(width int) []renderedSearchRow {
 		if len(rows) > 0 {
 			rows = append(rows, renderedSearchRow{text: "", resultIndex: -1})
 		}
-		rows = append(rows, renderedSearchRow{text: ui.PaneTitle.Render("Songs"), resultIndex: -1})
+		rows = append(rows, renderedSearchRow{text: sectionHeader("Songs"), resultIndex: -1})
 		for _, song := range m.globalSearchResult.Songs {
 			titleWidth := max(width-18, 10)
 			title := ui.Truncate(formatSongSearchResult(song), titleWidth)
@@ -209,14 +209,14 @@ func (m Model) renderArtists(width, height int) string {
 	if m.err != nil {
 		lines = append(lines, ui.Error.Render(m.err.Error()))
 	} else if m.loading && len(m.songs) == 0 {
-		lines = append(lines, ui.Subtitle.Render("Loading..."))
+		lines = append(lines, emptyState("Loading..."))
 	} else if len(m.artists) == 0 {
-		lines = append(lines, ui.Subtitle.Render("No artists found"))
+		lines = append(lines, emptyState("No artists found"))
 	}
 
 	rows := m.artistRows()
 	if len(rows) == 0 && m.filterQueryFor(songsPane) != "" {
-		lines = append(lines, ui.Subtitle.Render("No matches"))
+		lines = append(lines, emptyState("No matches"))
 	}
 
 	selected := clamp(m.selectedArtistRow, 0, max(len(rows)-1, 0))

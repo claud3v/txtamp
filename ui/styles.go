@@ -22,6 +22,11 @@ var (
 	Subtitle = lipgloss.NewStyle().
 			Foreground(ColorMuted)
 
+	// Empty, loading, and neutral state text.
+	EmptyState = lipgloss.NewStyle().
+			Foreground(ColorMuted).
+			Italic(true)
+
 	// Labels beside form fields.
 	Label = lipgloss.NewStyle().
 		Bold(true).
@@ -155,11 +160,23 @@ var (
 			Bold(true).
 			Foreground(ColorAccent)
 
+	// Player active state label.
+	PlayerStatusPlaying = PlayerStatus.Copy().
+				Foreground(ColorPlaying)
+
+	// Player inactive state label.
+	PlayerStatusStopped = PlayerStatus.Copy().
+				Foreground(ColorMuted)
+
 	// Player secondary metadata.
 	PlayerMeta = lipgloss.NewStyle().
 			Foreground(ColorMuted)
 
-	// Player upcoming item.
-	PlayerUpNext = lipgloss.NewStyle().
-			Foreground(ColorMuted)
+	// Player upcoming item label.
+	PlayerUpNextLabel = lipgloss.NewStyle().
+				Foreground(ColorMuted)
+
+	// Player upcoming item title.
+	PlayerUpNextTitle = lipgloss.NewStyle().
+				Foreground(ColorText)
 )

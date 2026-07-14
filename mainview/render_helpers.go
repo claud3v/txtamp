@@ -16,12 +16,7 @@ func paneTitle(title string, focused bool) string {
 }
 
 func selectableLine(text string, selected, focused bool, width int) string {
-	prefix := "  "
-	if selected {
-		prefix = "> "
-	}
-
-	return styledLine(prefix, text, selected, focused, false, width)
+	return styledLine(rowPrefix(selected, false, ""), text, selected, focused, false, width)
 }
 
 func searchLine(query string) string {
@@ -45,39 +40,21 @@ func globalSearchLine(query string) string {
 func songLine(text string, index int, m Model, width int) string {
 	selected := index == m.selectedSong
 	playing := m.currentSong != nil && index < len(m.songs) && m.songs[index].ID == m.currentSong.ID
-	prefix := "  "
-	if selected {
-		prefix = "> "
-	} else if playing {
-		prefix = "* "
-	}
 
-	return styledLine(prefix, text, selected, m.focused == songsPane, playing, width)
+	return styledLine(rowPrefix(selected, playing, ""), text, selected, m.focused == songsPane, playing, width)
 }
 
 func nestedSongLine(text string, index int, selected bool, m Model, width int) string {
 	playing := m.currentSong != nil && index < len(m.songs) && m.songs[index].ID == m.currentSong.ID
-	prefix := "    "
-	if selected {
-		prefix = "  > "
-	} else if playing {
-		prefix = "  * "
-	}
 
-	return styledLine(prefix, text, selected, m.focused == songsPane, playing, width)
+	return styledLine(rowPrefix(selected, playing, "  "), text, selected, m.focused == songsPane, playing, width)
 }
 
 func queueSongLine(text string, index int, m Model, width int) string {
 	selected := index == m.selectedQueue
 	playing := m.currentSong != nil && index < len(m.queue) && m.queue[index].ID == m.currentSong.ID
-	prefix := "  "
-	if selected {
-		prefix = "> "
-	} else if playing {
-		prefix = "* "
-	}
 
-	return styledLine(prefix, text, selected, m.focused == songsPane, playing, width)
+	return styledLine(rowPrefix(selected, playing, ""), text, selected, m.focused == songsPane, playing, width)
 }
 
 func albumHeaderLine(prefix, text string, expanded, selected, focused bool, width int) string {
@@ -108,6 +85,25 @@ func styledLine(prefix, text string, selected, focused, playing bool, width int)
 	}
 
 	return lipgloss.NewStyle().Width(width).Render(line)
+}
+
+func rowPrefix(selected, playing bool, indent string) string {
+	switch {
+	case selected:
+		return indent + "> "
+	case playing:
+		return indent + "* "
+	default:
+		return indent + "  "
+	}
+}
+
+func emptyState(text string) string {
+	return ui.EmptyState.Render(text)
+}
+
+func sectionHeader(text string) string {
+	return ui.SectionHeader.Render(text)
 }
 
 func formatDuration(seconds int) string {

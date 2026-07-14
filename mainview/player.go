@@ -33,15 +33,27 @@ func (m Model) renderPlayer(width int) string {
 	timeText := elapsed + " / " + duration
 	barWidth := max(innerWidth, 8)
 
-	statusText := ui.PlayerStatus.Render(status)
+	statusText := playerStatusStyle(status).Render(status)
 	titleLine := joinLeftRight(statusText+"  "+ui.PlayerTitle.Render(title), ui.PlayerMeta.Render(timeText), innerWidth)
 	metadataLine := ui.PlayerMeta.Render(joinLeftRight(metadata, m.visiblePlaybackSource(), innerWidth))
 	progressLine := progressBar(m.elapsed, m.currentDuration(), barWidth)
-	upNextLine := ui.PlayerUpNext.Render("Up next: " + ui.Truncate(m.upNextText(), max(innerWidth-9, 8)))
+	upNextTitle := ui.Truncate(m.upNextText(), max(innerWidth-9, 8))
+	upNextLine := ui.PlayerUpNextLabel.Render("Up next: ") + ui.PlayerUpNextTitle.Render(upNextTitle)
 
 	return ui.PlayerBar.
 		Width(width - 2).
 		Render(titleLine + "\n" + metadataLine + "\n" + progressLine + "\n" + upNextLine)
+}
+
+func playerStatusStyle(status string) lipgloss.Style {
+	switch status {
+	case "Playing":
+		return ui.PlayerStatusPlaying
+	case "Stopped":
+		return ui.PlayerStatusStopped
+	default:
+		return ui.PlayerStatus
+	}
 }
 
 func (m Model) upNextText() string {

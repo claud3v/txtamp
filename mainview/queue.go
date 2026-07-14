@@ -220,7 +220,7 @@ func (m Model) renderQueue(width, height int) string {
 	}
 
 	if len(m.queue) == 0 {
-		lines = append(lines, ui.Subtitle.Render("Queue is empty"))
+		lines = append(lines, emptyState("Queue is empty"))
 	} else {
 		start, end := visibleRange(m.selectedQueue, len(m.queue), m.visibleQueueRows(height))
 		for i := start; i < end; i++ {

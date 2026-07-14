@@ -27,7 +27,7 @@ func (m Model) renderSidebar(width, height int) string {
 	lines = append(lines, paneTitle(m.sidebarTitle(), m.focused == playlistsPane))
 
 	if m.loading && m.sidebarItemCount() == 0 {
-		lines = append(lines, ui.Subtitle.Render("Loading..."))
+		lines = append(lines, emptyState("Loading..."))
 	}
 
 	lines = append(lines, m.sidebarItems(width-4, height)...)
@@ -77,12 +77,12 @@ func (m Model) sidebarItems(width, height int) []string {
 			return nil
 		}
 		if len(m.artists) == 0 && !m.loading {
-			return []string{ui.Subtitle.Render("No artists found")}
+			return []string{emptyState("No artists found")}
 		}
 
 		artists := m.filteredArtists()
 		if len(artists) == 0 && m.filterQueryFor(playlistsPane) != "" {
-			return []string{ui.Subtitle.Render("No matches")}
+			return []string{emptyState("No matches")}
 		}
 
 		rows := artistSidebarRows(artists)
@@ -106,12 +106,12 @@ func (m Model) sidebarItems(width, height int) []string {
 			return nil
 		}
 		if len(m.playlists) == 0 && !m.loading {
-			return []string{ui.Subtitle.Render("No playlists found")}
+			return []string{emptyState("No playlists found")}
 		}
 
 		playlists := m.filteredPlaylists()
 		if len(playlists) == 0 && m.filterQueryFor(playlistsPane) != "" {
-			return []string{ui.Subtitle.Render("No matches")}
+			return []string{emptyState("No matches")}
 		}
 
 		selected := m.selectedPlaylistPosition(playlists)
@@ -208,7 +208,7 @@ func artistSidebarVisibleRange(rows []artistSidebarRow, selected, height int) (i
 }
 
 func artistGroupHeader(group string, width int) string {
-	line := group + " " + strings.Repeat("-", max(width-len(group)-1, 0))
+	line := group + " " + strings.Repeat("-", min(max(width-len(group)-1, 0), 12))
 	return ui.SectionHeader.Width(width).Render(ui.Truncate(line, width))
 }
 
