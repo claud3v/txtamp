@@ -209,7 +209,7 @@ func artistSidebarVisibleRange(rows []artistSidebarRow, selected, height int) (i
 
 func artistGroupHeader(group string, width int) string {
 	line := group + " " + strings.Repeat("-", max(width-len(group)-1, 0))
-	return ui.AlbumCollapsed.Width(width).Render(ui.Truncate(line, width))
+	return ui.SectionHeader.Width(width).Render(ui.Truncate(line, width))
 }
 
 func (m Model) sidebarSelectableLine(text string, selected bool, width int) string {

@@ -67,6 +67,20 @@ func TestRenderPlayerHidesRedundantArtistSource(t *testing.T) {
 	}
 }
 
+func TestRenderPlayerHidesSearchSource(t *testing.T) {
+	m := loadedModel()
+	m.currentSong = &m.songs[0]
+	m.playbackSource = "Search: aerosmith"
+
+	content := m.renderPlayer(100)
+	if strings.Contains(content, "Source: Search: aerosmith") {
+		t.Fatalf("expected search source to be hidden, got:\n%s", content)
+	}
+	if !strings.Contains(content, "Aerosmith - Aerosmith") {
+		t.Fatalf("expected song metadata to remain visible, got:\n%s", content)
+	}
+}
+
 func TestRenderPlayerShowsNextLoadedSongWhenQueueIsEmpty(t *testing.T) {
 	m := loadedModel()
 	m.currentSong = &m.songs[0]

@@ -33,10 +33,11 @@ func (m Model) renderPlayer(width int) string {
 	timeText := elapsed + " / " + duration
 	barWidth := max(innerWidth, 8)
 
-	titleLine := joinLeftRight(status+"  "+title, timeText, innerWidth)
-	metadataLine := joinLeftRight(metadata, m.visiblePlaybackSource(), innerWidth)
+	statusText := ui.PlayerStatus.Render(status)
+	titleLine := joinLeftRight(statusText+"  "+ui.PlayerTitle.Render(title), ui.PlayerMeta.Render(timeText), innerWidth)
+	metadataLine := ui.PlayerMeta.Render(joinLeftRight(metadata, m.visiblePlaybackSource(), innerWidth))
 	progressLine := progressBar(m.elapsed, m.currentDuration(), barWidth)
-	upNextLine := "Up next: " + ui.Truncate(m.upNextText(), max(innerWidth-9, 8))
+	upNextLine := ui.PlayerUpNext.Render("Up next: " + ui.Truncate(m.upNextText(), max(innerWidth-9, 8)))
 
 	return ui.PlayerBar.
 		Width(width - 2).
@@ -62,6 +63,9 @@ func (m Model) visiblePlaybackSource() string {
 		return ""
 	}
 	if m.playbackSource == "Artist: "+m.currentSong.Artist {
+		return ""
+	}
+	if strings.HasPrefix(m.playbackSource, "Search: ") {
 		return ""
 	}
 
@@ -130,6 +134,7 @@ func progressBar(elapsed, duration, width int) string {
 
 	bar := progress.New(
 		progress.WithWidth(width),
+		progress.WithColors(ui.ColorAccent, ui.ColorBorder),
 		progress.WithFillCharacters('━', '─'),
 		progress.WithoutPercentage(),
 	)
