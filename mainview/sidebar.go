@@ -87,8 +87,7 @@ func (m Model) sidebarItems(width, height int) []string {
 
 		rows := artistSidebarRows(artists)
 		selected := selectedArtistSidebarRow(rows, m.selectedArtist)
-		start, end := visibleRange(selected, len(rows), m.visibleSidebarRows(height))
-		start, end = artistSidebarVisibleRange(rows, start, end, m.visibleSidebarRows(height))
+		start, end := artistSidebarVisibleRange(rows, selected, m.visibleSidebarRows(height))
 		lines := make([]string, 0, end-start)
 		for i := start; i < end; i++ {
 			row := rows[i]
@@ -173,8 +172,22 @@ func selectedArtistSidebarRow(rows []artistSidebarRow, selectedArtist int) int {
 	return 0
 }
 
-func artistSidebarVisibleRange(rows []artistSidebarRow, start, end, height int) (int, int) {
-	if start <= 0 || start >= len(rows) || rows[start].header != "" {
+func artistSidebarVisibleRange(rows []artistSidebarRow, selected, height int) (int, int) {
+	if len(rows) == 0 || height <= 0 {
+		return 0, 0
+	}
+
+	if height >= len(rows) {
+		return 0, len(rows)
+	}
+
+	selected = clamp(selected, 0, len(rows)-1)
+	bottomPadding := min(2, height/3)
+	start := selected - height + 1 + bottomPadding
+	start = clamp(start, 0, max(len(rows)-height, 0))
+	end := min(start+height, len(rows))
+
+	if start <= 0 || rows[start].header != "" {
 		return start, end
 	}
 
@@ -183,6 +196,9 @@ func artistSidebarVisibleRange(rows []artistSidebarRow, start, end, height int) 
 		header--
 	}
 	if header < 0 {
+		return start, end
+	}
+	if selected >= header+height {
 		return start, end
 	}
 

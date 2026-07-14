@@ -749,6 +749,26 @@ func TestArtistSidebarStartsAtGroupHeaderWhenScrolledIntoGroup(t *testing.T) {
 	}
 }
 
+func TestArtistSidebarKeepsSelectedArtistVisibleWhenGroupHeaderIsTooFarUp(t *testing.T) {
+	m := loadedModel()
+	m.mode = artistsMode
+	m.focused = playlistsPane
+	m.artists = []navidrome.Artist{
+		{ID: "artist-1", Name: "Van Halen"},
+		{ID: "artist-2", Name: "Van Morrison"},
+		{ID: "artist-3", Name: "Vanessa Carlton"},
+		{ID: "artist-4", Name: "Vangelis"},
+		{ID: "artist-5", Name: "Vince Gill"},
+		{ID: "artist-6", Name: "Vance Joy"},
+	}
+	m.selectedArtist = 5
+
+	content := m.renderSidebar(36, 12)
+	if !strings.Contains(content, "> Vance Joy") {
+		t.Fatalf("expected selected V artist to stay visible, got:\n%s", content)
+	}
+}
+
 func TestSelectedArtistMarqueesWhenFocused(t *testing.T) {
 	m := loadedModel()
 	m.mode = artistsMode
@@ -799,6 +819,77 @@ func TestMarqueeTextLoops(t *testing.T) {
 	}
 	if got := marqueeText("abcdef", 3, marqueePauseTicks+7); got != "  a" {
 		t.Fatalf("expected wrapped text, got %q", got)
+	}
+}
+
+func TestGoToArtistLetterJumpsToFirstMatchingArtist(t *testing.T) {
+	m := loadedModel()
+	m.mode = artistsMode
+	m.focused = playlistsPane
+	m.artists = []navidrome.Artist{
+		{ID: "artist-1", Name: "AC/DC"},
+		{ID: "artist-2", Name: "Eclipse"},
+		{ID: "artist-3", Name: "Ed Sheeran"},
+		{ID: "artist-4", Name: "H.e.a.t"},
+	}
+
+	updated, cmd := m.Update(tea.KeyPressMsg{Code: 'g', Text: "g"})
+	m = updated.(Model)
+	if cmd != nil {
+		t.Fatal("expected go-to prefix to wait for a letter")
+	}
+	if !m.goToArtistPending {
+		t.Fatal("expected go-to artist mode")
+	}
+
+	updated, cmd = m.Update(tea.KeyPressMsg{Code: 'e', Text: "e"})
+	m = updated.(Model)
+	if cmd == nil {
+		t.Fatal("expected selected artist load command")
+	}
+	if m.selectedArtist != 1 {
+		t.Fatalf("expected Eclipse at index 1, got %d", m.selectedArtist)
+	}
+	if m.goToArtistPending {
+		t.Fatal("expected go-to mode to clear")
+	}
+}
+
+func TestGoToArtistLetterHandlesDottedName(t *testing.T) {
+	m := loadedModel()
+	m.mode = artistsMode
+	m.focused = playlistsPane
+	m.artists = []navidrome.Artist{
+		{ID: "artist-1", Name: "AC/DC"},
+		{ID: "artist-2", Name: "H.e.a.t"},
+	}
+
+	m.goToArtistPending = true
+	updated, cmd := m.Update(tea.KeyPressMsg{Code: 'h', Text: "h"})
+	m = updated.(Model)
+
+	if cmd == nil {
+		t.Fatal("expected selected artist load command")
+	}
+	if m.selectedArtist != 1 {
+		t.Fatalf("expected H.e.a.t at index 1, got %d", m.selectedArtist)
+	}
+}
+
+func TestGoToArtistEscCancels(t *testing.T) {
+	m := loadedModel()
+	m.mode = artistsMode
+	m.focused = playlistsPane
+	m.goToArtistPending = true
+
+	updated, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
+	m = updated.(Model)
+
+	if cmd != nil {
+		t.Fatal("expected no command")
+	}
+	if m.goToArtistPending {
+		t.Fatal("expected go-to mode to clear")
 	}
 }
 

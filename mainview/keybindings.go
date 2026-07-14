@@ -31,6 +31,7 @@ const (
 	actionCloseDialog    action = "close_dialog"
 	actionStartSearch    action = "start_search"
 	actionGlobalSearch   action = "global_search"
+	actionGoToArtist     action = "go_to_artist"
 	actionToggleHelp     action = "toggle_help"
 )
 
@@ -48,6 +49,7 @@ var defaultKeyBindings = []keyBinding{
 	{Key: "right", Action: actionFocusMainArea, Description: "Focus songs"},
 	{Key: "/", Action: actionStartSearch, Description: "Filter focused pane"},
 	{Key: "s", Action: actionGlobalSearch, Description: "Global search"},
+	{Key: "g", Action: actionGoToArtist, Description: "Go to artist letter"},
 	{Key: "a", Action: actionAddToQueue, Description: "Add selected song or album to queue"},
 	{Key: "q", Action: actionToggleQueue, Description: "Show queue"},
 	{Key: "d", Action: actionRemoveQueue, Description: "Remove queued song"},

@@ -71,6 +71,7 @@ type Model struct {
 	searching                  bool
 	searchPane                 focusPane
 	searchQuery                string
+	goToArtistPending          bool
 	globalSearching            bool
 	globalSearchQuery          string
 	globalSearchSubmittedQuery string
@@ -384,6 +385,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
+		if m.goToArtistPending {
+			cmd := m.handleGoToArtistKey(msg)
+			return m, cmd
+		}
+
 		if m.globalSearching {
 			cmd := m.handleGlobalSearchKey(msg)
 			return m, cmd
@@ -430,6 +436,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.startSearch()
 		case actionGlobalSearch:
 			m.startGlobalSearch()
+		case actionGoToArtist:
+			m.startGoToArtist()
 		case actionToggleQueue:
 			m.toggleQueue()
 		case actionAddToQueue:

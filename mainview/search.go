@@ -50,6 +50,47 @@ func (m *Model) startSearch() {
 	m.searchPane = m.focused
 }
 
+func (m *Model) startGoToArtist() {
+	if m.mode != artistsMode || m.focused != playlistsPane || len(m.filteredArtists()) == 0 {
+		return
+	}
+
+	m.goToArtistPending = true
+}
+
+func (m *Model) handleGoToArtistKey(msg tea.KeyMsg) tea.Cmd {
+	m.goToArtistPending = false
+	action, ok := actionForKey(msg.String())
+	if ok && action == actionCloseDialog {
+		return nil
+	}
+	if msg.String() == "" || len([]rune(msg.String())) != 1 {
+		return nil
+	}
+
+	return m.goToArtistLetter([]rune(msg.String())[0])
+}
+
+func (m *Model) goToArtistLetter(letter rune) tea.Cmd {
+	target := artistGroup(string(letter))
+	for _, artist := range m.filteredArtists() {
+		if artistGroup(artist.artist.Name) == target {
+			if m.selectedArtist == artist.index {
+				return nil
+			}
+
+			m.selectedArtist = artist.index
+			m.selectedArtistRow = 0
+			m.collapsedAlbums = nil
+			m.selectedSong = 0
+			m.sidebarMarqueeOffset = 0
+			return tea.Batch(m.loadSelectedArtist(), tickSidebarMarquee())
+		}
+	}
+
+	return nil
+}
+
 func (m *Model) startGlobalSearch() {
 	m.contentMode = globalSearchContent
 	m.focused = songsPane
