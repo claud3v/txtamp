@@ -31,10 +31,24 @@ func (m Model) renderPlayer(width int) string {
 
 	titleLine := fmt.Sprintf("%s  %s", status, ui.Truncate(nowPlaying, max(innerWidth-len(status)-2, 8)))
 	progressLine := fmt.Sprintf("%s  %s", progressBar(m.elapsed, m.currentDuration(), barWidth), timeText)
+	upNextLine := "Up next: " + ui.Truncate(m.upNextText(), max(innerWidth-9, 8))
 
 	return ui.PlayerBar.
 		Width(width - 2).
-		Render(titleLine + "\n" + progressLine)
+		Render(titleLine + "\n" + progressLine + "\n" + upNextLine)
+}
+
+func (m Model) upNextText() string {
+	if len(m.queue) > 0 {
+		return formatNowPlaying(m.queue[0])
+	}
+
+	nextIndex := m.currentSongIndex + 1
+	if m.currentSong != nil && m.currentSongIndex >= 0 && nextIndex < len(m.songs) {
+		return formatNowPlaying(m.songs[nextIndex])
+	}
+
+	return "-"
 }
 
 func formatNowPlaying(song navidrome.Song) string {
