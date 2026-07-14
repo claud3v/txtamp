@@ -151,20 +151,9 @@ func (m *Model) playSelectedAlbum() tea.Cmd {
 		return nil
 	}
 
-	first := songs[0]
-	remaining := append([]navidrome.Song(nil), songs[1:]...)
-	if len(remaining) > 0 {
-		m.queue = append(remaining, m.queue...)
-		m.queueDirty = true
-	}
 	m.showToast("Playing album: " + formatAlbumTitle(m.selectedArtistAlbumRow().album))
 
-	cmds := []tea.Cmd{m.playSongAtIndex(first, -1), clearToast(m.toastID)}
-	if len(remaining) > 0 {
-		cmds = append(cmds, m.saveQueue())
-	}
-
-	return tea.Batch(cmds...)
+	return tea.Batch(m.playSongFromList(songs[0], 0, songs), clearToast(m.toastID))
 }
 
 func (m *Model) moveQueuedSong(delta int) bool {

@@ -89,6 +89,7 @@ type Model struct {
 	elapsed                    int
 	duration                   int
 	currentSongIndex           int
+	playbackSongs              []navidrome.Song
 	playbackID                 int
 	loading                    bool
 	err                        error
@@ -926,14 +927,19 @@ func (m *Model) playSongAt(index int) tea.Cmd {
 	index = clamp(index, 0, len(m.songs)-1)
 	m.selectedSong = index
 
-	return m.playSongAtIndex(m.songs[index], index)
+	return m.playSongFromList(m.songs[index], index, m.songs)
 }
 
 func (m *Model) playSongAtIndex(song navidrome.Song, index int) tea.Cmd {
+	return m.playSongFromList(song, index, nil)
+}
+
+func (m *Model) playSongFromList(song navidrome.Song, index int, songs []navidrome.Song) tea.Cmd {
 	client := m.client
 	player := m.player
 	playbackID := m.playbackID + 1
 	m.playbackID = playbackID
+	m.playbackSongs = append([]navidrome.Song(nil), songs...)
 
 	return func() tea.Msg {
 		streamURL, err := client.StreamURL(song.ID)
@@ -959,7 +965,8 @@ func (m *Model) playNextSong() tea.Cmd {
 		return m.consumeQueuedSongAt(0)
 	}
 
-	if len(m.songs) == 0 {
+	playbackSongs := m.activePlaybackSongs()
+	if len(playbackSongs) == 0 {
 		return nil
 	}
 	if m.currentSongIndex < 0 {
@@ -967,7 +974,7 @@ func (m *Model) playNextSong() tea.Cmd {
 	}
 
 	nextIndex := m.currentSongIndex + 1
-	if nextIndex >= len(m.songs) {
+	if nextIndex >= len(playbackSongs) {
 		m.currentSong = nil
 		m.elapsed = 0
 		m.duration = 0
@@ -976,7 +983,8 @@ func (m *Model) playNextSong() tea.Cmd {
 		return nil
 	}
 
-	return m.playSongAt(nextIndex)
+	m.syncVisibleSelectionToPlaybackSong(playbackSongs[nextIndex], nextIndex)
+	return m.playSongFromList(playbackSongs[nextIndex], nextIndex, playbackSongs)
 }
 
 func (m *Model) playPreviousSong() tea.Cmd {
@@ -986,12 +994,43 @@ func (m *Model) playPreviousSong() tea.Cmd {
 	if m.currentSongIndex < 0 {
 		return m.seekStart()
 	}
+	playbackSongs := m.activePlaybackSongs()
+	if len(playbackSongs) == 0 {
+		return m.seekStart()
+	}
 
 	if m.elapsed > restartLimit || m.currentSongIndex == 0 {
 		return m.seekStart()
 	}
 
-	return m.playSongAt(m.currentSongIndex - 1)
+	previousIndex := m.currentSongIndex - 1
+	m.syncVisibleSelectionToPlaybackSong(playbackSongs[previousIndex], previousIndex)
+	return m.playSongFromList(playbackSongs[previousIndex], previousIndex, playbackSongs)
+}
+
+func (m Model) activePlaybackSongs() []navidrome.Song {
+	if len(m.playbackSongs) > 0 {
+		return m.playbackSongs
+	}
+	if m.currentSong == nil || m.currentSongIndex < 0 || m.currentSongIndex >= len(m.songs) {
+		return nil
+	}
+	if m.songs[m.currentSongIndex].ID != m.currentSong.ID {
+		return nil
+	}
+
+	return m.songs
+}
+
+func (m *Model) syncVisibleSelectionToPlaybackSong(song navidrome.Song, index int) {
+	if index < 0 || index >= len(m.songs) {
+		return
+	}
+	if m.songs[index].ID != song.ID {
+		return
+	}
+
+	m.selectedSong = index
 }
 
 func (m *Model) seekStart() tea.Cmd {

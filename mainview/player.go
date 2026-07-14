@@ -43,9 +43,10 @@ func (m Model) upNextText() string {
 		return formatNowPlaying(m.queue[0])
 	}
 
+	playbackSongs := m.activePlaybackSongs()
 	nextIndex := m.currentSongIndex + 1
-	if m.currentSong != nil && m.currentSongIndex >= 0 && nextIndex < len(m.songs) {
-		return formatNowPlaying(m.songs[nextIndex])
+	if m.currentSong != nil && m.currentSongIndex >= 0 && nextIndex < len(playbackSongs) {
+		return formatNowPlaying(playbackSongs[nextIndex])
 	}
 
 	return "-"

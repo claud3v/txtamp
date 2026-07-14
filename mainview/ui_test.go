@@ -1070,7 +1070,7 @@ func TestAddArtistAlbumToQueue(t *testing.T) {
 	}
 }
 
-func TestSpaceOnArtistAlbumPlaysAlbumAndQueuesRemainingSongs(t *testing.T) {
+func TestSpaceOnArtistAlbumUsesAlbumAsPlaybackContext(t *testing.T) {
 	m := artistAlbumModel()
 	m.focused = songsPane
 	m.selectedArtistRow = 2
@@ -1094,14 +1094,34 @@ func TestSpaceOnArtistAlbumPlaysAlbumAndQueuesRemainingSongs(t *testing.T) {
 	if m.playbackID != 1 {
 		t.Fatalf("expected playback id to increment, got %d", m.playbackID)
 	}
-	if len(m.queue) != 2 {
-		t.Fatalf("expected remaining album song plus existing queue, got %+v", m.queue)
+	if len(m.queue) != 1 || m.queue[0].ID != "existing" {
+		t.Fatalf("expected existing queue to stay unchanged, got %+v", m.queue)
 	}
-	if m.queue[0].ID != "song-3" || m.queue[1].ID != "existing" {
-		t.Fatalf("expected remaining album songs to be queued first, got %+v", m.queue)
+	if len(m.playbackSongs) != 2 {
+		t.Fatalf("expected album playback context, got %+v", m.playbackSongs)
+	}
+	if m.playbackSongs[0].ID != "song-2" || m.playbackSongs[1].ID != "song-3" {
+		t.Fatalf("expected album songs in playback context, got %+v", m.playbackSongs)
 	}
 	if !strings.Contains(m.toast, "Playing album") {
 		t.Fatalf("expected playing album toast, got %q", m.toast)
+	}
+}
+
+func TestUpNextUsesPlaybackContextAfterVisibleSongsChange(t *testing.T) {
+	m := loadedModel()
+	playing := m.songs[0]
+	originalContext := append([]navidrome.Song(nil), m.songs...)
+	m.currentSong = &playing
+	m.currentSongIndex = 0
+	m.playbackSongs = originalContext
+	m.songs = []navidrome.Song{
+		{ID: "other-1", Title: "Other First", Duration: 100},
+		{ID: "other-2", Title: "Other Second", Duration: 100},
+	}
+
+	if got := m.upNextText(); got != "Aerosmith - Toys in the Attic - Sweet Emotion" {
+		t.Fatalf("expected up next from original playback context, got %q", got)
 	}
 }
 
