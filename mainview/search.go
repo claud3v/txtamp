@@ -165,7 +165,7 @@ func (m *Model) activateGlobalSearchResult() tea.Cmd {
 		return nil
 	}
 
-	return m.playSongFromList(row.song, m.globalSearchSongIndex(row.song), m.globalSearchResult.Songs)
+	return m.playSongFromList(row.song, m.globalSearchSongIndex(row.song), m.globalSearchResult.Songs, "Search: "+m.globalSearchSubmittedQuery)
 }
 
 func (m Model) globalSearchSongIndex(song navidrome.Song) int {

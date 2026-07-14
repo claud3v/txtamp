@@ -90,6 +90,7 @@ type Model struct {
 	duration                   int
 	currentSongIndex           int
 	playbackSongs              []navidrome.Song
+	playbackSource             string
 	playbackID                 int
 	loading                    bool
 	err                        error
@@ -927,19 +928,22 @@ func (m *Model) playSongAt(index int) tea.Cmd {
 	index = clamp(index, 0, len(m.songs)-1)
 	m.selectedSong = index
 
-	return m.playSongFromList(m.songs[index], index, m.songs)
+	return m.playSongFromList(m.songs[index], index, m.songs, m.currentLibraryPlaybackSource())
 }
 
 func (m *Model) playSongAtIndex(song navidrome.Song, index int) tea.Cmd {
-	return m.playSongFromList(song, index, nil)
+	return m.playSongFromList(song, index, nil, "")
 }
 
-func (m *Model) playSongFromList(song navidrome.Song, index int, songs []navidrome.Song) tea.Cmd {
+func (m *Model) playSongFromList(song navidrome.Song, index int, songs []navidrome.Song, source string) tea.Cmd {
 	client := m.client
 	player := m.player
 	playbackID := m.playbackID + 1
 	m.playbackID = playbackID
 	m.playbackSongs = append([]navidrome.Song(nil), songs...)
+	if source != "" {
+		m.playbackSource = source
+	}
 
 	return func() tea.Msg {
 		streamURL, err := client.StreamURL(song.ID)
@@ -984,7 +988,7 @@ func (m *Model) playNextSong() tea.Cmd {
 	}
 
 	m.syncVisibleSelectionToPlaybackSong(playbackSongs[nextIndex], nextIndex)
-	return m.playSongFromList(playbackSongs[nextIndex], nextIndex, playbackSongs)
+	return m.playSongFromList(playbackSongs[nextIndex], nextIndex, playbackSongs, m.playbackSource)
 }
 
 func (m *Model) playPreviousSong() tea.Cmd {
@@ -1005,7 +1009,22 @@ func (m *Model) playPreviousSong() tea.Cmd {
 
 	previousIndex := m.currentSongIndex - 1
 	m.syncVisibleSelectionToPlaybackSong(playbackSongs[previousIndex], previousIndex)
-	return m.playSongFromList(playbackSongs[previousIndex], previousIndex, playbackSongs)
+	return m.playSongFromList(playbackSongs[previousIndex], previousIndex, playbackSongs, m.playbackSource)
+}
+
+func (m Model) currentLibraryPlaybackSource() string {
+	switch m.mode {
+	case playlistsMode:
+		if len(m.playlists) > 0 {
+			return "Playlist: " + m.playlists[clamp(m.selectedPlaylist, 0, len(m.playlists)-1)].Name
+		}
+	case artistsMode:
+		if len(m.artists) > 0 {
+			return "Artist: " + m.artists[clamp(m.selectedArtist, 0, len(m.artists)-1)].Name
+		}
+	}
+
+	return ""
 }
 
 func (m Model) activePlaybackSongs() []navidrome.Song {

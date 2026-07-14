@@ -45,6 +45,17 @@ func TestRenderPlayerShowsUpNext(t *testing.T) {
 	}
 }
 
+func TestRenderPlayerShowsPlaybackSource(t *testing.T) {
+	m := loadedModel()
+	m.currentSong = &m.songs[0]
+	m.playbackSource = "Playlist: Favorites"
+
+	content := m.renderPlayer(100)
+	if !strings.Contains(content, "Playing from Playlist: Favorites") {
+		t.Fatalf("expected playback source, got:\n%s", content)
+	}
+}
+
 func TestRenderPlayerShowsNextLoadedSongWhenQueueIsEmpty(t *testing.T) {
 	m := loadedModel()
 	m.currentSong = &m.songs[0]

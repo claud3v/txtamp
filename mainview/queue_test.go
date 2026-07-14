@@ -159,6 +159,9 @@ func TestEnterPlaysSelectedQueueSongWithoutRemovingIt(t *testing.T) {
 	if m.playbackID != 1 {
 		t.Fatalf("expected playback id to increment, got %d", m.playbackID)
 	}
+	if m.playbackSource != "Queue" {
+		t.Fatalf("expected queue playback source, got %q", m.playbackSource)
+	}
 }
 
 func TestNextSongConsumesQueueBeforePlaylist(t *testing.T) {

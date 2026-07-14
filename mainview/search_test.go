@@ -190,6 +190,7 @@ func TestActivateGlobalSearchSongPlaysSongOutsideCurrentList(t *testing.T) {
 	m.contentMode = globalSearchContent
 	m.focused = songsPane
 	m.selectedSearchResult = 0
+	m.globalSearchSubmittedQuery = "victory"
 	m.globalSearchResult = navidrome.SearchResult{
 		Songs: []navidrome.Song{{ID: "search-song", Title: "Victory", Duration: 240}},
 	}
@@ -200,5 +201,8 @@ func TestActivateGlobalSearchSongPlaysSongOutsideCurrentList(t *testing.T) {
 	}
 	if m.playbackID != 1 {
 		t.Fatalf("expected playback id to increment, got %d", m.playbackID)
+	}
+	if m.playbackSource != "Search: victory" {
+		t.Fatalf("expected search playback source, got %q", m.playbackSource)
 	}
 }

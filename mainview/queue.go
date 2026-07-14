@@ -151,9 +151,10 @@ func (m *Model) playSelectedAlbum() tea.Cmd {
 		return nil
 	}
 
-	m.showToast("Playing album: " + formatAlbumTitle(m.selectedArtistAlbumRow().album))
+	albumTitle := formatAlbumTitle(m.selectedArtistAlbumRow().album)
+	m.showToast("Playing album: " + albumTitle)
 
-	return tea.Batch(m.playSongFromList(songs[0], 0, songs), clearToast(m.toastID))
+	return tea.Batch(m.playSongFromList(songs[0], 0, songs, "Album: "+albumTitle), clearToast(m.toastID))
 }
 
 func (m *Model) moveQueuedSong(delta int) bool {
@@ -178,7 +179,7 @@ func (m *Model) playSelectedQueueSong() tea.Cmd {
 	}
 
 	index := clamp(m.selectedQueue, 0, len(m.queue)-1)
-	return m.playSongAtIndex(m.queue[index], -1)
+	return m.playSongFromList(m.queue[index], -1, nil, "Queue")
 }
 
 func (m *Model) consumeQueuedSongAt(index int) tea.Cmd {
@@ -190,7 +191,7 @@ func (m *Model) consumeQueuedSongAt(index int) tea.Cmd {
 	song := m.queue[index]
 	m.removeQueueSongAt(index)
 
-	return tea.Batch(m.playSongAtIndex(song, -1), m.saveQueue())
+	return tea.Batch(m.playSongFromList(song, -1, nil, "Queue"), m.saveQueue())
 }
 
 func (m *Model) removeQueueSongAt(index int) {

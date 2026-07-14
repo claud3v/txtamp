@@ -108,6 +108,20 @@ func TestSpaceReturnsPlayCommand(t *testing.T) {
 	}
 }
 
+func TestPlaylistPlaybackSetsSource(t *testing.T) {
+	m := loadedModel()
+	m.focused = songsPane
+	m.selectedPlaylist = 0
+
+	cmd := m.playSongAt(0)
+	if cmd == nil {
+		t.Fatal("expected play command")
+	}
+	if m.playbackSource != "Playlist: Favorites" {
+		t.Fatalf("expected playlist source, got %q", m.playbackSource)
+	}
+}
+
 func TestPlaybackMessageUpdatesCurrentSong(t *testing.T) {
 	m := loadedModel()
 	song := m.songs[0]
@@ -1102,6 +1116,9 @@ func TestSpaceOnArtistAlbumUsesAlbumAsPlaybackContext(t *testing.T) {
 	}
 	if m.playbackSongs[0].ID != "song-2" || m.playbackSongs[1].ID != "song-3" {
 		t.Fatalf("expected album songs in playback context, got %+v", m.playbackSongs)
+	}
+	if m.playbackSource != "Album: Toys in the Attic (1975)" {
+		t.Fatalf("expected album playback source, got %q", m.playbackSource)
 	}
 	if !strings.Contains(m.toast, "Playing album") {
 		t.Fatalf("expected playing album toast, got %q", m.toast)

@@ -29,7 +29,13 @@ func (m Model) renderPlayer(width int) string {
 	timeText := elapsed + " / " + duration
 	barWidth := max(innerWidth-len(timeText)-3, 8)
 
-	titleLine := fmt.Sprintf("%s  %s", status, ui.Truncate(nowPlaying, max(innerWidth-len(status)-2, 8)))
+	statusText := status
+	if m.playbackSource != "" && m.currentSong != nil {
+		statusText += " from " + m.playbackSource
+	}
+	statusText = ui.Truncate(statusText, max(innerWidth-10, len(status)))
+
+	titleLine := fmt.Sprintf("%s  %s", statusText, ui.Truncate(nowPlaying, max(innerWidth-len(statusText)-2, 8)))
 	progressLine := fmt.Sprintf("%s  %s", progressBar(m.elapsed, m.currentDuration(), barWidth), timeText)
 	upNextLine := "Up next: " + ui.Truncate(m.upNextText(), max(innerWidth-9, 8))
 
