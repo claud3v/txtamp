@@ -963,7 +963,7 @@ func TestStatusBarShowsAlbumActionsForSelectedAlbum(t *testing.T) {
 	m.selectedArtistRow = 0
 
 	content := m.renderStatusBar(120)
-	for _, expected := range []string{"Enter Toggle", "a Queue Album"} {
+	for _, expected := range []string{"Space Play Album", "Enter Toggle", "a Queue Album"} {
 		if !strings.Contains(content, expected) {
 			t.Fatalf("expected %q in status bar, got:\n%s", expected, content)
 		}
@@ -1067,6 +1067,41 @@ func TestAddArtistAlbumToQueue(t *testing.T) {
 	}
 	if !strings.Contains(m.toast, "Added album to queue") {
 		t.Fatalf("expected album queue toast, got %q", m.toast)
+	}
+}
+
+func TestSpaceOnArtistAlbumPlaysAlbumAndQueuesRemainingSongs(t *testing.T) {
+	m := artistAlbumModel()
+	m.focused = songsPane
+	m.selectedArtistRow = 2
+	m.albums[1].songs = []navidrome.Song{
+		{ID: "song-2", Title: "Sweet Emotion", Duration: 274},
+		{ID: "song-3", Title: "Walk This Way", Duration: 220},
+	}
+	m.songs = []navidrome.Song{
+		{ID: "song-1", Title: "Dream On", Duration: 268},
+		{ID: "song-2", Title: "Sweet Emotion", Duration: 274},
+		{ID: "song-3", Title: "Walk This Way", Duration: 220},
+	}
+	m.queue = []navidrome.Song{{ID: "existing", Title: "Existing Queue Song"}}
+
+	updated, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeySpace})
+	m = updated.(Model)
+
+	if cmd == nil {
+		t.Fatal("expected album play command")
+	}
+	if m.playbackID != 1 {
+		t.Fatalf("expected playback id to increment, got %d", m.playbackID)
+	}
+	if len(m.queue) != 2 {
+		t.Fatalf("expected remaining album song plus existing queue, got %+v", m.queue)
+	}
+	if m.queue[0].ID != "song-3" || m.queue[1].ID != "existing" {
+		t.Fatalf("expected remaining album songs to be queued first, got %+v", m.queue)
+	}
+	if !strings.Contains(m.toast, "Playing album") {
+		t.Fatalf("expected playing album toast, got %q", m.toast)
 	}
 }
 

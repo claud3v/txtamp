@@ -455,6 +455,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmd := m.activateSelection()
 			return m, cmd
 		case actionPlayPause:
+			if cmd := m.playSelectedAlbum(); cmd != nil {
+				return m, cmd
+			}
 			cmd := m.togglePlayPause()
 			return m, cmd
 		case actionStopPlayback:
