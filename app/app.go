@@ -2,8 +2,10 @@ package app
 
 import (
 	"fmt"
+	"os"
 	"txtamp/auth"
 	"txtamp/mainview"
+	"txtamp/ui"
 
 	tea "charm.land/bubbletea/v2"
 )
@@ -100,6 +102,7 @@ func (m Model) View() tea.View {
 }
 
 func Run() error {
+	applyThemeFromEnv()
 	p := tea.NewProgram(New())
 
 	if _, err := p.Run(); err != nil {
@@ -107,4 +110,13 @@ func Run() error {
 	}
 
 	return nil
+}
+
+func applyThemeFromEnv() {
+	name := os.Getenv("TXTAMP_THEME")
+	if name == "" {
+		return
+	}
+
+	ui.ApplyThemeByName(name)
 }

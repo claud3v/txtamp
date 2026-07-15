@@ -20,6 +20,20 @@
 - Bubbles
 - mpv
 
+## Themes
+
+Press `t` in the app to switch themes.
+
+You can also set `TXTAMP_THEME` before launching:
+
+```sh
+TXTAMP_THEME=violet-terminal go run .
+```
+
+Built-ins: `default`, `violet-terminal`, `neon-grid`, `phosphor-amber`, `deep-space`, `paperwhite`, `monolith`.
+
+Aliases: `retro`, `sci-fi`, `futuristic`, `amber`, `dark`, `light`, `mono`.
+
 ## Roadmap
 
 - [ ] Connect to Navidrome

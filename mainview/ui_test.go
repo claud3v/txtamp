@@ -6,6 +6,7 @@ import (
 	"testing"
 	"txtamp/navidrome"
 	"txtamp/player"
+	"txtamp/ui"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/lipgloss"
@@ -633,6 +634,50 @@ func TestModeDialogViewShowsPicker(t *testing.T) {
 	}
 	if !strings.Contains(view.Content, "Dream On") {
 		t.Fatalf("expected dialog to overlay the existing view, got:\n%s", view.Content)
+	}
+}
+
+func TestThemeDialogAppliesSelectedTheme(t *testing.T) {
+	defer ui.ApplyThemeByName("txtamp-classic")
+
+	m := loadedModel()
+	updated, cmd := m.Update(tea.KeyPressMsg{Code: 't', Text: "t"})
+	m = updated.(Model)
+
+	if cmd != nil {
+		t.Fatal("expected no command when opening theme dialog")
+	}
+	if !m.themeDialogOpen {
+		t.Fatal("expected theme dialog to open")
+	}
+
+	updated, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	m = updated.(Model)
+	updated, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = updated.(Model)
+
+	if m.themeDialogOpen {
+		t.Fatal("expected theme dialog to close")
+	}
+	if ui.CurrentThemeName != "violet-terminal" {
+		t.Fatalf("expected violet-terminal theme, got %q", ui.CurrentThemeName)
+	}
+}
+
+func TestThemeDialogViewShowsPicker(t *testing.T) {
+	m := loadedModel()
+	m.width = 100
+	m.height = 30
+	m.themeDialogOpen = true
+
+	view := m.View()
+	for _, expected := range []string{"Theme", "Violet Terminal", "Neon Grid"} {
+		if !strings.Contains(view.Content, expected) {
+			t.Fatalf("expected %q in theme dialog, got:\n%s", expected, view.Content)
+		}
+	}
+	if !strings.Contains(view.Content, "Dream On") {
+		t.Fatalf("expected dialog to overlay existing view, got:\n%s", view.Content)
 	}
 }
 

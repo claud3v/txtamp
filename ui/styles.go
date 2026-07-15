@@ -3,115 +3,150 @@ package ui
 import "github.com/charmbracelet/lipgloss"
 
 var (
-	ColorBackground = DefaultTheme.Background
-	ColorText       = DefaultTheme.Text
-	ColorMuted      = DefaultTheme.Muted
-	ColorBorder     = DefaultTheme.Border
-	ColorAccent     = DefaultTheme.Accent
-	ColorPlaying    = DefaultTheme.Playing
-	ColorError      = DefaultTheme.Error
-	ColorSelectedFg = DefaultTheme.SelectedFg
-	ColorSelectedBg = DefaultTheme.SelectedBg
+	CurrentTheme     = DefaultTheme
+	CurrentThemeName = "txtamp-classic"
 
-	// Application title.
+	ColorBackground lipgloss.Color
+	ColorText       lipgloss.Color
+	ColorMuted      lipgloss.Color
+	ColorBorder     lipgloss.Color
+	ColorAccent     lipgloss.Color
+	ColorPlaying    lipgloss.Color
+	ColorError      lipgloss.Color
+	ColorSelectedFg lipgloss.Color
+	ColorSelectedBg lipgloss.Color
+
+	Title               lipgloss.Style
+	Subtitle            lipgloss.Style
+	EmptyState          lipgloss.Style
+	Label               lipgloss.Style
+	Text                lipgloss.Style
+	Error               lipgloss.Style
+	Success             lipgloss.Style
+	Button              lipgloss.Style
+	ButtonFocused       lipgloss.Style
+	Card                lipgloss.Style
+	Page                lipgloss.Style
+	Sidebar             lipgloss.Style
+	MainPane            lipgloss.Style
+	PlayerBar           lipgloss.Style
+	StatusBar           lipgloss.Style
+	PaneTitle           lipgloss.Style
+	ModeSelector        lipgloss.Style
+	ModeSelectorActive  lipgloss.Style
+	Dialog              lipgloss.Style
+	Toast               lipgloss.Style
+	PaneTitleFocused    lipgloss.Style
+	SelectedRow         lipgloss.Style
+	SelectedRowFocused  lipgloss.Style
+	PlayingRow          lipgloss.Style
+	AlbumExpanded       lipgloss.Style
+	AlbumCollapsed      lipgloss.Style
+	SectionHeader       lipgloss.Style
+	PlayerTitle         lipgloss.Style
+	PlayerStatus        lipgloss.Style
+	PlayerStatusPlaying lipgloss.Style
+	PlayerStatusStopped lipgloss.Style
+	PlayerMeta          lipgloss.Style
+	PlayerUpNextLabel   lipgloss.Style
+	PlayerUpNextTitle   lipgloss.Style
+)
+
+func init() {
+	ApplyTheme(DefaultTheme)
+}
+
+func ApplyTheme(theme Theme) {
+	CurrentTheme = theme
+	ColorBackground = theme.Background
+	ColorText = theme.Text
+	ColorMuted = theme.Muted
+	ColorBorder = theme.Border
+	ColorAccent = theme.Accent
+	ColorPlaying = theme.Playing
+	ColorError = theme.Error
+	ColorSelectedFg = theme.SelectedFg
+	ColorSelectedBg = theme.SelectedBg
+
 	Title = lipgloss.NewStyle().
 		Bold(true).
 		Foreground(ColorAccent)
 
-	// Smaller descriptive text.
 	Subtitle = lipgloss.NewStyle().
-			Foreground(ColorMuted)
+		Foreground(ColorMuted)
 
-	// Empty, loading, and neutral state text.
 	EmptyState = lipgloss.NewStyle().
-			Foreground(ColorMuted).
-			Italic(true)
+		Foreground(ColorMuted).
+		Italic(true)
 
-	// Labels beside form fields.
 	Label = lipgloss.NewStyle().
 		Bold(true).
 		Width(12)
 
-	// Normal body text.
 	Text = lipgloss.NewStyle().
 		Foreground(ColorText)
 
-	// Error messages.
 	Error = lipgloss.NewStyle().
 		Bold(true).
 		Foreground(ColorError)
 
-	// Success messages.
 	Success = lipgloss.NewStyle().
 		Bold(true).
 		Foreground(ColorPlaying)
 
-	// Primary button.
 	Button = lipgloss.NewStyle().
 		Bold(true).
 		Padding(0, 2).
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(ColorAccent)
 
-	// Button when selected.
 	ButtonFocused = Button.Copy().
-			Foreground(ColorSelectedFg).
-			Background(ColorSelectedBg)
+		Foreground(ColorSelectedFg).
+		Background(ColorSelectedBg)
 
-	// Surrounds an entire form.
 	Card = lipgloss.NewStyle().
 		Padding(1, 2)
 
-	// Page margin.
 	Page = lipgloss.NewStyle().
 		Padding(1, 2)
 
-	// Main application sidebar.
 	Sidebar = lipgloss.NewStyle().
 		Padding(1, 2).
 		Border(lipgloss.NormalBorder(), false, true, false, false).
 		BorderForeground(ColorBorder)
 
-	// Main content area.
 	MainPane = lipgloss.NewStyle().
-			Padding(1, 2)
+		Padding(1, 2)
 
-	// Bottom player status area.
 	PlayerBar = lipgloss.NewStyle().
-			Padding(1, 2).
-			Border(lipgloss.NormalBorder(), true, false, false, false).
-			BorderForeground(ColorBorder)
+		Padding(1, 2).
+		Border(lipgloss.NormalBorder(), true, false, false, false).
+		BorderForeground(ColorBorder)
 
-	// One-line command hint footer.
 	StatusBar = lipgloss.NewStyle().
-			Padding(0, 2).
-			Foreground(ColorMuted)
+		Padding(0, 2).
+		Foreground(ColorMuted)
 
-	// Pane title.
 	PaneTitle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(ColorAccent)
+		Bold(true).
+		Foreground(ColorAccent)
 
-	// Sidebar mode selector.
 	ModeSelector = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(ColorMuted)
+		Bold(true).
+		Foreground(ColorMuted)
 
-	// Active sidebar mode.
 	ModeSelectorActive = lipgloss.NewStyle().
-				Bold(true).
-				Foreground(ColorSelectedFg).
-				Background(ColorSelectedBg).
-				Padding(0, 1)
+		Bold(true).
+		Foreground(ColorSelectedFg).
+		Background(ColorSelectedBg).
+		Padding(0, 1)
 
-	// Centered modal dialog.
 	Dialog = lipgloss.NewStyle().
 		Padding(1, 3).
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(ColorAccent).
 		Background(ColorBackground)
 
-	// Short-lived non-blocking notification.
 	Toast = lipgloss.NewStyle().
 		Padding(0, 2).
 		Border(lipgloss.RoundedBorder()).
@@ -119,64 +154,50 @@ var (
 		Foreground(ColorPlaying).
 		Background(ColorBackground)
 
-	// Focused pane title.
 	PaneTitleFocused = PaneTitle.Copy().
-				Underline(true)
+		Underline(true)
 
-	// Selected row.
 	SelectedRow = lipgloss.NewStyle().
-			Foreground(ColorAccent)
+		Foreground(ColorAccent)
 
-	// Selected row in the focused pane.
 	SelectedRowFocused = lipgloss.NewStyle().
-				Foreground(ColorSelectedFg).
-				Background(ColorSelectedBg)
+		Foreground(ColorSelectedFg).
+		Background(ColorSelectedBg)
 
-	// Currently playing row.
 	PlayingRow = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(ColorPlaying)
+		Bold(true).
+		Foreground(ColorPlaying)
 
-	// Expanded album header.
 	AlbumExpanded = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(ColorAccent)
+		Bold(true).
+		Foreground(ColorAccent)
 
-	// Collapsed album header.
 	AlbumCollapsed = lipgloss.NewStyle().
-			Foreground(ColorMuted)
+		Foreground(ColorMuted)
 
-	// Section dividers inside lists.
 	SectionHeader = lipgloss.NewStyle().
-			Foreground(ColorMuted)
+		Foreground(ColorMuted)
 
-	// Player primary title.
 	PlayerTitle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(ColorText)
+		Bold(true).
+		Foreground(ColorText)
 
-	// Player state label.
 	PlayerStatus = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(ColorAccent)
+		Bold(true).
+		Foreground(ColorAccent)
 
-	// Player active state label.
 	PlayerStatusPlaying = PlayerStatus.Copy().
-				Foreground(ColorPlaying)
+		Foreground(ColorPlaying)
 
-	// Player inactive state label.
 	PlayerStatusStopped = PlayerStatus.Copy().
-				Foreground(ColorMuted)
+		Foreground(ColorMuted)
 
-	// Player secondary metadata.
 	PlayerMeta = lipgloss.NewStyle().
-			Foreground(ColorMuted)
+		Foreground(ColorMuted)
 
-	// Player upcoming item label.
 	PlayerUpNextLabel = lipgloss.NewStyle().
-				Foreground(ColorMuted)
+		Foreground(ColorMuted)
 
-	// Player upcoming item title.
 	PlayerUpNextTitle = lipgloss.NewStyle().
-				Foreground(ColorText)
-)
+		Foreground(ColorText)
+}

@@ -66,8 +66,10 @@ type Model struct {
 	mode                       sidebarMode
 	contentMode                mainContentMode
 	modeDialogOpen             bool
+	themeDialogOpen            bool
 	helpOpen                   bool
 	selectedMode               sidebarMode
+	selectedTheme              int
 	searching                  bool
 	searchPane                 focusPane
 	searchQuery                string
@@ -187,12 +189,13 @@ type sidebarMarqueeTickMsg struct{}
 
 func New(connectedTo string, client navidrome.Client) Model {
 	return Model{
-		connectedTo: connectedTo,
-		client:      client,
-		player:      player.New(),
-		focused:     playlistsPane,
-		mode:        playlistsMode,
-		loading:     true,
+		connectedTo:   connectedTo,
+		client:        client,
+		player:        player.New(),
+		focused:       playlistsPane,
+		mode:          playlistsMode,
+		selectedTheme: themeIndexByName(ui.CurrentThemeName),
+		loading:       true,
 	}
 }
 
@@ -415,6 +418,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 
+		if m.themeDialogOpen {
+			cmd := m.handleThemeDialogAction(action)
+			return m, cmd
+		}
+
 		switch action {
 		case actionFocusSidebar:
 			m.focused = playlistsPane
@@ -436,6 +444,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.startSearch()
 		case actionGlobalSearch:
 			m.startGlobalSearch()
+		case actionToggleTheme:
+			m.openThemeDialog()
 		case actionGoToArtist:
 			m.startGoToArtist()
 		case actionToggleQueue:
@@ -529,6 +539,9 @@ func (m Model) View() tea.View {
 	content := lipgloss.JoinVertical(lipgloss.Left, body, player, status)
 	if m.modeDialogOpen {
 		content = overlayCentered(content, m.renderModeDialog(), layout.Width, layout.Height)
+	}
+	if m.themeDialogOpen {
+		content = overlayCentered(content, m.renderThemeDialog(), layout.Width, layout.Height)
 	}
 	if m.helpOpen {
 		content = overlayCentered(content, m.renderHelpDialog(), layout.Width, layout.Height)
@@ -636,6 +649,35 @@ func modeDialogRow(label, key string, selected bool, width int) string {
 	return lipgloss.NewStyle().Width(width).Render(text)
 }
 
+func (m Model) renderThemeDialog() string {
+	width := 48
+	lines := []string{
+		lipgloss.NewStyle().Width(width).Render(ui.PaneTitle.Render("Theme")),
+		lipgloss.NewStyle().Width(width).Render(""),
+	}
+	for i, option := range ui.BuiltInThemeOptions {
+		lines = append(lines, themeDialogRow(option.Label, option.Name, i == m.selectedTheme, width))
+	}
+
+	return ui.Dialog.Render(lipgloss.JoinVertical(lipgloss.Left, lines...))
+}
+
+func themeDialogRow(label, key string, selected bool, width int) string {
+	labelWidth := 22
+	text := lipgloss.JoinHorizontal(
+		lipgloss.Top,
+		lipgloss.NewStyle().Width(labelWidth).Render(ui.Truncate(label, labelWidth)),
+		"  ",
+		ui.Truncate(key, max(width-labelWidth-2, 1)),
+	)
+
+	if selected {
+		return ui.SelectedRowFocused.Width(width).Render(text)
+	}
+
+	return lipgloss.NewStyle().Width(width).Render(text)
+}
+
 func (m *Model) moveSelection(delta int) tea.Cmd {
 	if m.contentMode == globalSearchContent && m.focused == songsPane {
 		m.moveGlobalSearchSelection(delta)
@@ -721,6 +763,11 @@ func (m *Model) openModeDialog() {
 	m.selectedMode = m.mode
 }
 
+func (m *Model) openThemeDialog() {
+	m.themeDialogOpen = true
+	m.selectedTheme = themeIndexByName(ui.CurrentThemeName)
+}
+
 func (m *Model) handleModeDialogAction(action action) tea.Cmd {
 	switch action {
 	case actionCloseDialog:
@@ -753,6 +800,41 @@ func (m *Model) applySelectedMode() tea.Cmd {
 	mode := m.selectedMode
 	m.modeDialogOpen = false
 	return m.switchMode(mode)
+}
+
+func (m *Model) handleThemeDialogAction(action action) tea.Cmd {
+	switch action {
+	case actionCloseDialog:
+		m.themeDialogOpen = false
+	case actionMoveUp:
+		m.selectedTheme = clamp(m.selectedTheme-1, 0, len(ui.BuiltInThemeOptions)-1)
+	case actionMoveDown:
+		m.selectedTheme = clamp(m.selectedTheme+1, 0, len(ui.BuiltInThemeOptions)-1)
+	case actionActivate:
+		m.applySelectedTheme()
+	}
+
+	return nil
+}
+
+func (m *Model) applySelectedTheme() {
+	if len(ui.BuiltInThemeOptions) == 0 {
+		return
+	}
+
+	m.selectedTheme = clamp(m.selectedTheme, 0, len(ui.BuiltInThemeOptions)-1)
+	ui.ApplyThemeByName(ui.BuiltInThemeOptions[m.selectedTheme].Name)
+	m.themeDialogOpen = false
+}
+
+func themeIndexByName(name string) int {
+	for i, option := range ui.BuiltInThemeOptions {
+		if option.Name == name {
+			return i
+		}
+	}
+
+	return 0
 }
 
 func (m *Model) moveSidebarSelection(delta int) tea.Cmd {
