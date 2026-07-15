@@ -576,6 +576,164 @@ func TestSwitchToArtistsLoadsArtists(t *testing.T) {
 	}
 }
 
+func TestSwitchToAlbumsLoadsAlbums(t *testing.T) {
+	m := loadedModel()
+
+	updated, cmd := m.Update(tea.KeyPressMsg{Code: '2', Text: "2"})
+	m = updated.(Model)
+
+	if m.mode != albumsMode {
+		t.Fatalf("expected albums mode, got %v", m.mode)
+	}
+	if m.focused != playlistsPane {
+		t.Fatalf("expected sidebar focus, got %v", m.focused)
+	}
+	if cmd == nil {
+		t.Fatal("expected album load command")
+	}
+}
+
+func TestAlbumsLoadedLoadsFirstAlbum(t *testing.T) {
+	m := New("home", navidrome.Client{})
+	m.mode = albumsMode
+	m.loading = true
+
+	updated, cmd := m.Update(albumsLoadedMsg{
+		albums: []navidrome.Album{
+			{ID: "album-1", Name: "Toys in the Attic", Artist: "Aerosmith", Year: 1975},
+			{ID: "album-2", Name: "Rocks", Artist: "Aerosmith", Year: 1976},
+		},
+	})
+	m = updated.(Model)
+
+	if cmd == nil {
+		t.Fatal("expected first album to load")
+	}
+	if m.selectedAlbum != 0 {
+		t.Fatalf("expected first album selected, got %d", m.selectedAlbum)
+	}
+	if len(m.albums) != 2 {
+		t.Fatalf("expected albums to be cached, got %d", len(m.albums))
+	}
+	if !m.loading {
+		t.Fatal("expected album songs to be loading")
+	}
+}
+
+func TestAlbumLoadedStoresSelectedAlbumSongs(t *testing.T) {
+	m := loadedModel()
+	m.mode = albumsMode
+	m.albums = []navidrome.Album{{ID: "album-1", Name: "Toys in the Attic", Artist: "Aerosmith", Year: 1975}}
+	m.loading = true
+
+	updated, _ := m.Update(albumLoadedMsg{
+		albumID: "album-1",
+		songs: []navidrome.Song{
+			{ID: "song-1", Title: "Sweet Emotion", Artist: "Aerosmith", Album: "Toys in the Attic", Duration: 274},
+		},
+	})
+	m = updated.(Model)
+
+	if m.loading {
+		t.Fatal("expected loading to finish")
+	}
+	if m.loadedAlbumID != "album-1" {
+		t.Fatalf("expected loaded album id, got %q", m.loadedAlbumID)
+	}
+	if len(m.songs) != 1 || m.songs[0].Title != "Sweet Emotion" {
+		t.Fatalf("unexpected songs: %+v", m.songs)
+	}
+
+	content := m.renderMainArea(80, 12)
+	for _, expected := range []string{"Toys in the Attic (1975)", "Aerosmith", "Sweet Emotion"} {
+		if !strings.Contains(content, expected) {
+			t.Fatalf("expected %q in album view, got:\n%s", expected, content)
+		}
+	}
+}
+
+func TestAlbumSidebarGroupsByFirstLetter(t *testing.T) {
+	m := loadedModel()
+	m.mode = albumsMode
+	m.albums = []navidrome.Album{
+		{ID: "album-1", Name: "A Night at the Opera", Artist: "Queen"},
+		{ID: "album-2", Name: "Back in Black", Artist: "AC/DC"},
+	}
+
+	content := strings.Join(m.sidebarItems(40, 20), "\n")
+	for _, expected := range []string{"A -----", "A Night at the Opera - Queen", "B -----", "Back in Black - AC/DC"} {
+		if !strings.Contains(content, expected) {
+			t.Fatalf("expected %q in album sidebar, got:\n%s", expected, content)
+		}
+	}
+}
+
+func TestAlbumSidebarGroupsNumbersAndSymbolsUnderHash(t *testing.T) {
+	m := loadedModel()
+	m.mode = albumsMode
+	m.albums = []navidrome.Album{
+		{ID: "album-1", Name: "1984", Artist: "Van Halen"},
+		{ID: "album-2", Name: "...And Justice for All", Artist: "Metallica"},
+		{ID: "album-3", Name: "Back in Black", Artist: "AC/DC"},
+	}
+
+	content := strings.Join(m.sidebarItems(40, 20), "\n")
+	for _, expected := range []string{"# -----", "1984 - Van Halen", "...And Justice for All - Metallica", "B -----", "Back in Black - AC/DC"} {
+		if !strings.Contains(content, expected) {
+			t.Fatalf("expected %q in album sidebar, got:\n%s", expected, content)
+		}
+	}
+}
+
+func TestAlbumSidebarSortsAlbumsBeforeGrouping(t *testing.T) {
+	m := loadedModel()
+	m.mode = albumsMode
+	m.albums = []navidrome.Album{
+		{ID: "album-1", Name: "Address the Nation", Artist: "H.e.a.t"},
+		{ID: "album-2", Name: "The Aeroplane Flies High", Artist: "The Smashing Pumpkins"},
+		{ID: "album-3", Name: "Afterburner", Artist: "ZZ Top"},
+	}
+
+	content := strings.Join(m.sidebarItems(40, 20), "\n")
+	if strings.Count(content, "A -----") != 1 {
+		t.Fatalf("expected a single A group, got:\n%s", content)
+	}
+	if strings.Index(content, "Address the Nation") > strings.Index(content, "Afterburner") {
+		t.Fatalf("expected A albums to be grouped together alphabetically, got:\n%s", content)
+	}
+	if strings.Index(content, "Afterburner") > strings.Index(content, "T -----") {
+		t.Fatalf("expected T group after A albums, got:\n%s", content)
+	}
+}
+
+func TestStaleAlbumLoadIsIgnored(t *testing.T) {
+	m := loadedModel()
+	m.mode = albumsMode
+	m.albums = []navidrome.Album{
+		{ID: "album-1", Name: "Toys in the Attic"},
+		{ID: "album-2", Name: "Rocks"},
+	}
+	m.selectedAlbum = 1
+	m.songs = []navidrome.Song{{ID: "song-2", Title: "Back in the Saddle"}}
+	m.loading = true
+
+	updated, cmd := m.Update(albumLoadedMsg{
+		albumID: "album-1",
+		songs:   []navidrome.Song{{ID: "song-1", Title: "Sweet Emotion"}},
+	})
+	m = updated.(Model)
+
+	if cmd != nil {
+		t.Fatal("expected stale album load not to trigger a command")
+	}
+	if len(m.songs) != 1 || m.songs[0].Title != "Back in the Saddle" {
+		t.Fatalf("expected stale songs to be ignored, got %+v", m.songs)
+	}
+	if !m.loading {
+		t.Fatal("expected current load state to be preserved")
+	}
+}
+
 func TestDropdownOpensModeDialog(t *testing.T) {
 	m := loadedModel()
 	m.focused = modeSelectorPane
@@ -603,8 +761,22 @@ func TestModeDialogAppliesSelectedMode(t *testing.T) {
 	updated, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyUp})
 	m = updated.(Model)
 
+	if m.selectedMode != albumsMode {
+		t.Fatalf("expected albums to be selected, got %v", m.selectedMode)
+	}
+
+	updated, cmd = m.Update(tea.KeyPressMsg{Code: tea.KeyUp})
+	m = updated.(Model)
+
 	if m.selectedMode != artistsMode {
-		t.Fatalf("expected artists to be selected, got %v", m.selectedMode)
+		t.Fatalf("expected artists to be selected after another up, got %v", m.selectedMode)
+	}
+
+	updated, cmd = m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	m = updated.(Model)
+
+	if m.selectedMode != albumsMode {
+		t.Fatalf("expected albums to be selected after down, got %v", m.selectedMode)
 	}
 
 	updated, cmd = m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
@@ -613,11 +785,11 @@ func TestModeDialogAppliesSelectedMode(t *testing.T) {
 	if m.modeDialogOpen {
 		t.Fatal("expected mode dialog to close")
 	}
-	if m.mode != artistsMode {
-		t.Fatalf("expected artists mode, got %v", m.mode)
+	if m.mode != albumsMode {
+		t.Fatalf("expected albums mode, got %v", m.mode)
 	}
 	if cmd == nil {
-		t.Fatal("expected artist load command")
+		t.Fatal("expected album load command")
 	}
 }
 
@@ -629,7 +801,7 @@ func TestModeDialogViewShowsPicker(t *testing.T) {
 	m.selectedMode = artistsMode
 
 	view := m.View()
-	if !strings.Contains(view.Content, "Artists") || !strings.Contains(view.Content, "Playlists") {
+	if !strings.Contains(view.Content, "Artists") || !strings.Contains(view.Content, "Albums") || !strings.Contains(view.Content, "Playlists") {
 		t.Fatalf("expected mode picker options, got:\n%s", view.Content)
 	}
 	if !strings.Contains(view.Content, "Dream On") {
@@ -883,7 +1055,7 @@ func TestGoToArtistLetterJumpsToFirstMatchingArtist(t *testing.T) {
 	if cmd != nil {
 		t.Fatal("expected go-to prefix to wait for a letter")
 	}
-	if !m.goToArtistPending {
+	if !m.goToSidebarGroupPending {
 		t.Fatal("expected go-to artist mode")
 	}
 
@@ -895,7 +1067,7 @@ func TestGoToArtistLetterJumpsToFirstMatchingArtist(t *testing.T) {
 	if m.selectedArtist != 1 {
 		t.Fatalf("expected Eclipse at index 1, got %d", m.selectedArtist)
 	}
-	if m.goToArtistPending {
+	if m.goToSidebarGroupPending {
 		t.Fatal("expected go-to mode to clear")
 	}
 }
@@ -909,7 +1081,7 @@ func TestGoToArtistLetterHandlesDottedName(t *testing.T) {
 		{ID: "artist-2", Name: "H.e.a.t"},
 	}
 
-	m.goToArtistPending = true
+	m.goToSidebarGroupPending = true
 	updated, cmd := m.Update(tea.KeyPressMsg{Code: 'h', Text: "h"})
 	m = updated.(Model)
 
@@ -921,11 +1093,43 @@ func TestGoToArtistLetterHandlesDottedName(t *testing.T) {
 	}
 }
 
+func TestGoToAlbumLetterJumpsToFirstMatchingAlbum(t *testing.T) {
+	m := loadedModel()
+	m.mode = albumsMode
+	m.focused = playlistsPane
+	m.albums = []navidrome.Album{
+		{ID: "album-1", Name: "Address the Nation", Artist: "H.e.a.t"},
+		{ID: "album-2", Name: "Back in Black", Artist: "AC/DC"},
+		{ID: "album-3", Name: "Blackout", Artist: "Scorpions"},
+	}
+
+	updated, cmd := m.Update(tea.KeyPressMsg{Code: 'g', Text: "g"})
+	m = updated.(Model)
+	if cmd != nil {
+		t.Fatal("expected go-to prefix to wait for a letter")
+	}
+	if !m.goToSidebarGroupPending {
+		t.Fatal("expected go-to sidebar group mode")
+	}
+
+	updated, cmd = m.Update(tea.KeyPressMsg{Code: 'b', Text: "b"})
+	m = updated.(Model)
+	if cmd == nil {
+		t.Fatal("expected selected album load command")
+	}
+	if m.selectedAlbum != 1 {
+		t.Fatalf("expected Back in Black at index 1, got %d", m.selectedAlbum)
+	}
+	if m.goToSidebarGroupPending {
+		t.Fatal("expected go-to mode to clear")
+	}
+}
+
 func TestGoToArtistEscCancels(t *testing.T) {
 	m := loadedModel()
 	m.mode = artistsMode
 	m.focused = playlistsPane
-	m.goToArtistPending = true
+	m.goToSidebarGroupPending = true
 
 	updated, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	m = updated.(Model)
@@ -933,7 +1137,7 @@ func TestGoToArtistEscCancels(t *testing.T) {
 	if cmd != nil {
 		t.Fatal("expected no command")
 	}
-	if m.goToArtistPending {
+	if m.goToSidebarGroupPending {
 		t.Fatal("expected go-to mode to clear")
 	}
 }
@@ -1006,7 +1210,7 @@ func TestSwitchToPlaylistsLoadsSelectedPlaylist(t *testing.T) {
 	m.mode = artistsMode
 	m.artists = []navidrome.Artist{{ID: "artist-1", Name: "Aerosmith"}}
 
-	updated, cmd := m.Update(tea.KeyPressMsg{Code: '2', Text: "2"})
+	updated, cmd := m.Update(tea.KeyPressMsg{Code: '3', Text: "3"})
 	m = updated.(Model)
 
 	if m.mode != playlistsMode {
@@ -1069,7 +1273,7 @@ func TestArtistMainAreaRendersAlbumGroups(t *testing.T) {
 	m := loadedModel()
 	m.mode = artistsMode
 	m.artists = []navidrome.Artist{{ID: "artist-1", Name: "Aerosmith"}}
-	m.albums = []albumGroup{
+	m.artistAlbums = []albumGroup{
 		{
 			album: navidrome.Album{ID: "album-1", Name: "Aerosmith", Year: 1973, SongCount: 1, Duration: 268},
 			songs: []navidrome.Song{
@@ -1103,7 +1307,7 @@ func TestArtistSearchKeepsMatchingAlbumGroups(t *testing.T) {
 	m.searchPane = songsPane
 	m.searchQuery = "emotion"
 	m.artists = []navidrome.Artist{{ID: "artist-1", Name: "Aerosmith"}}
-	m.albums = []albumGroup{
+	m.artistAlbums = []albumGroup{
 		{
 			album: navidrome.Album{ID: "album-1", Name: "Aerosmith"},
 			songs: []navidrome.Song{
@@ -1331,11 +1535,32 @@ func TestAddArtistAlbumToQueue(t *testing.T) {
 	}
 }
 
+func TestAddSelectedAlbumToQueue(t *testing.T) {
+	m := albumModeModel()
+	m.focused = playlistsPane
+
+	updated, cmd := m.Update(tea.KeyPressMsg{Code: 'a', Text: "a"})
+	m = updated.(Model)
+
+	if cmd == nil {
+		t.Fatal("expected save and toast command")
+	}
+	if len(m.queue) != 2 {
+		t.Fatalf("expected whole album queued, got %+v", m.queue)
+	}
+	if m.queue[0].ID != "song-2" || m.queue[1].ID != "song-3" {
+		t.Fatalf("expected album songs queued, got %+v", m.queue)
+	}
+	if !strings.Contains(m.toast, "Added album to queue") {
+		t.Fatalf("expected album queue toast, got %q", m.toast)
+	}
+}
+
 func TestSpaceOnArtistAlbumUsesAlbumAsPlaybackContext(t *testing.T) {
 	m := artistAlbumModel()
 	m.focused = songsPane
 	m.selectedArtistRow = 2
-	m.albums[1].songs = []navidrome.Song{
+	m.artistAlbums[1].songs = []navidrome.Song{
 		{ID: "song-2", Title: "Sweet Emotion", Duration: 274},
 		{ID: "song-3", Title: "Walk This Way", Duration: 220},
 	}
@@ -1357,6 +1582,30 @@ func TestSpaceOnArtistAlbumUsesAlbumAsPlaybackContext(t *testing.T) {
 	}
 	if len(m.queue) != 1 || m.queue[0].ID != "existing" {
 		t.Fatalf("expected existing queue to stay unchanged, got %+v", m.queue)
+	}
+	if len(m.playbackSongs) != 2 {
+		t.Fatalf("expected album playback context, got %+v", m.playbackSongs)
+	}
+	if m.playbackSongs[0].ID != "song-2" || m.playbackSongs[1].ID != "song-3" {
+		t.Fatalf("expected album songs in playback context, got %+v", m.playbackSongs)
+	}
+	if m.playbackSource != "Album: Toys in the Attic (1975)" {
+		t.Fatalf("expected album playback source, got %q", m.playbackSource)
+	}
+	if !strings.Contains(m.toast, "Playing album") {
+		t.Fatalf("expected playing album toast, got %q", m.toast)
+	}
+}
+
+func TestSpaceOnSelectedAlbumUsesAlbumAsPlaybackContext(t *testing.T) {
+	m := albumModeModel()
+	m.focused = playlistsPane
+
+	updated, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeySpace})
+	m = updated.(Model)
+
+	if cmd == nil {
+		t.Fatal("expected album play command")
 	}
 	if len(m.playbackSongs) != 2 {
 		t.Fatalf("expected album playback context, got %+v", m.playbackSongs)
@@ -1520,7 +1769,7 @@ func artistAlbumModel() Model {
 	m := loadedModel()
 	m.mode = artistsMode
 	m.artists = []navidrome.Artist{{ID: "artist-1", Name: "Aerosmith"}}
-	m.albums = []albumGroup{
+	m.artistAlbums = []albumGroup{
 		{
 			album: navidrome.Album{ID: "album-1", Name: "Aerosmith", Year: 1973, SongCount: 1, Duration: 268},
 			songs: []navidrome.Song{
@@ -1537,6 +1786,22 @@ func artistAlbumModel() Model {
 	m.songs = []navidrome.Song{
 		{ID: "song-1", Title: "Dream On", Duration: 268},
 		{ID: "song-2", Title: "Sweet Emotion", Duration: 274},
+	}
+
+	return m
+}
+
+func albumModeModel() Model {
+	m := loadedModel()
+	m.mode = albumsMode
+	m.focused = playlistsPane
+	m.albums = []navidrome.Album{
+		{ID: "album-1", Name: "Toys in the Attic", Artist: "Aerosmith", Year: 1975, SongCount: 2, Duration: 494},
+	}
+	m.loadedAlbumID = "album-1"
+	m.songs = []navidrome.Song{
+		{ID: "song-2", Title: "Sweet Emotion", Artist: "Aerosmith", Album: "Toys in the Attic", Duration: 274},
+		{ID: "song-3", Title: "Walk This Way", Artist: "Aerosmith", Album: "Toys in the Attic", Duration: 220},
 	}
 
 	return m

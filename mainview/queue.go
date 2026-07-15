@@ -82,26 +82,50 @@ func (m Model) selectedPlayableSong() (navidrome.Song, bool) {
 }
 
 func (m Model) selectedAlbumSongs() ([]navidrome.Song, bool) {
-	if m.contentMode != libraryContent || m.mode != artistsMode {
+	if m.contentMode != libraryContent {
 		return nil, false
 	}
 
+	if m.mode == albumsMode && m.focused == playlistsPane && len(m.songs) > 0 && m.selectedSidebarItemLoaded() {
+		return append([]navidrome.Song(nil), m.songs...), true
+	}
+	if m.mode != artistsMode {
+		return nil, false
+	}
 	rows := m.artistRows()
 	if len(rows) == 0 {
 		return nil, false
 	}
 
 	row := rows[clamp(m.selectedArtistRow, 0, len(rows)-1)]
-	if row.songIndex >= 0 || row.albumIndex < 0 || row.albumIndex >= len(m.albums) {
+	if row.songIndex >= 0 || row.albumIndex < 0 || row.albumIndex >= len(m.artistAlbums) {
 		return nil, false
 	}
 
-	songs := m.albums[row.albumIndex].songs
+	songs := m.artistAlbums[row.albumIndex].songs
 	if len(songs) == 0 {
 		return nil, false
 	}
 
 	return append([]navidrome.Song(nil), songs...), true
+}
+
+func (m Model) selectedAlbumTitle() (string, bool) {
+	if m.contentMode != libraryContent {
+		return "", false
+	}
+
+	if m.mode == albumsMode && len(m.albums) > 0 && m.selectedSidebarItemLoaded() {
+		album := m.albums[clamp(m.selectedAlbum, 0, len(m.albums)-1)]
+		return formatAlbumTitle(album), true
+	}
+
+	row := m.selectedArtistAlbumRow()
+	if row == nil {
+		return "", false
+	}
+
+	return formatAlbumTitle(row.album), true
 }
 
 func (m *Model) moveQueueSelection(delta int) {
@@ -151,7 +175,10 @@ func (m *Model) playSelectedAlbum() tea.Cmd {
 		return nil
 	}
 
-	albumTitle := formatAlbumTitle(m.selectedArtistAlbumRow().album)
+	albumTitle, ok := m.selectedAlbumTitle()
+	if !ok {
+		return nil
+	}
 	m.showToast("Playing album: " + albumTitle)
 
 	return tea.Batch(m.playSongFromList(songs[0], 0, songs, "Album: "+albumTitle), clearToast(m.toastID))

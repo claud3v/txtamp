@@ -126,6 +126,38 @@ func (c Client) ListArtists(ctx context.Context) ([]Artist, error) {
 	return artists, nil
 }
 
+func (c Client) ListAlbums(ctx context.Context) ([]Album, error) {
+	var albums []Album
+	offset := 0
+	const pageSize = 500
+
+	for {
+		params := url.Values{}
+		params.Set("type", "alphabeticalByName")
+		params.Set("size", fmt.Sprintf("%d", pageSize))
+		params.Set("offset", fmt.Sprintf("%d", offset))
+
+		var response albumListResponse
+		if err := c.get(ctx, "getAlbumList2.view", params, &response); err != nil {
+			return nil, err
+		}
+
+		if err := checkStatus(response.Response.Status, response.Response.Error, "list albums"); err != nil {
+			return nil, err
+		}
+
+		page := response.Response.AlbumList.Album
+		albums = append(albums, page...)
+		if len(page) < pageSize {
+			break
+		}
+
+		offset += pageSize
+	}
+
+	return albums, nil
+}
+
 func (c Client) GetArtistAlbums(ctx context.Context, id string) ([]Album, error) {
 	params := url.Values{}
 	params.Set("id", id)
@@ -316,6 +348,16 @@ type artistResponse struct {
 		Artist struct {
 			Album []Album `json:"album"`
 		} `json:"artist"`
+	} `json:"subsonic-response"`
+}
+
+type albumListResponse struct {
+	Response struct {
+		Status    string        `json:"status"`
+		Error     subsonicError `json:"error"`
+		AlbumList struct {
+			Album []Album `json:"album"`
+		} `json:"albumList2"`
 	} `json:"subsonic-response"`
 }
 

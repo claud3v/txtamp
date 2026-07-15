@@ -27,6 +27,7 @@ const (
 	actionExpandAlbums   action = "expand_albums"
 	actionCollapseAlbums action = "collapse_albums"
 	actionShowArtists    action = "show_artists"
+	actionShowAlbums     action = "show_albums"
 	actionShowPlaylists  action = "show_playlists"
 	actionCloseDialog    action = "close_dialog"
 	actionStartSearch    action = "start_search"
@@ -50,7 +51,7 @@ var defaultKeyBindings = []keyBinding{
 	{Key: "right", Action: actionFocusMainArea, Description: "Focus songs"},
 	{Key: "/", Action: actionStartSearch, Description: "Filter focused pane"},
 	{Key: "s", Action: actionGlobalSearch, Description: "Global search"},
-	{Key: "g", Action: actionGoToArtist, Description: "Go to artist letter"},
+	{Key: "g", Action: actionGoToArtist, Description: "Go to sidebar letter"},
 	{Key: "t", Action: actionToggleTheme, Description: "Switch theme"},
 	{Key: "a", Action: actionAddToQueue, Description: "Add selected song or album to queue"},
 	{Key: "q", Action: actionToggleQueue, Description: "Show queue"},
@@ -62,7 +63,8 @@ var defaultKeyBindings = []keyBinding{
 	{Key: "E", Action: actionExpandAlbums, Description: "Expand all albums"},
 	{Key: "C", Action: actionCollapseAlbums, Description: "Collapse all albums"},
 	{Key: "1", Action: actionShowArtists, Description: "Show artists"},
-	{Key: "2", Action: actionShowPlaylists, Description: "Show playlists"},
+	{Key: "2", Action: actionShowAlbums, Description: "Show albums"},
+	{Key: "3", Action: actionShowPlaylists, Description: "Show playlists"},
 	{Key: "up", Action: actionMoveUp, Description: "Move up"},
 	{Key: "down", Action: actionMoveDown, Description: "Move down"},
 	{Key: "enter", Action: actionActivate, Description: "Open, play, or toggle selected item"},

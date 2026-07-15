@@ -22,33 +22,35 @@ func TestHelpDialogShowsShortcuts(t *testing.T) {
 	m := loadedModel()
 
 	content := m.renderHelpDialog()
-	for _, expected := range []string{"Shortcuts", "space", "Play or pause", "?", "Show shortcuts", "g", "Go to artist letter", "t", "Switch theme", "E", "Expand all albums", "C", "Collapse all albums"} {
+	for _, expected := range []string{"Shortcuts", "space", "Play or pause", "?", "Show shortcuts", "g", "Go to sidebar letter", "t", "Switch theme", "E", "Expand all albums", "C", "Collapse all albums"} {
 		if !strings.Contains(content, expected) {
 			t.Fatalf("expected %q in help dialog, got:\n%s", expected, content)
 		}
 	}
 }
 
-func TestStatusBarShowsGoToArtistHint(t *testing.T) {
+func TestStatusBarShowsGoToSidebarLetterHint(t *testing.T) {
 	m := loadedModel()
-	m.mode = artistsMode
-	m.focused = playlistsPane
+	for _, mode := range []sidebarMode{artistsMode, albumsMode} {
+		m.mode = mode
+		m.focused = playlistsPane
 
-	content := m.renderStatusBar(100)
-	if !strings.Contains(content, "g Go") {
-		t.Fatalf("expected go-to artist hint, got:\n%s", content)
+		content := m.renderStatusBar(100)
+		if !strings.Contains(content, "g Go") {
+			t.Fatalf("expected go-to sidebar hint for mode %v, got:\n%s", mode, content)
+		}
 	}
 }
 
-func TestStatusBarShowsGoToArtistPendingHint(t *testing.T) {
+func TestStatusBarShowsGoToSidebarLetterPendingHint(t *testing.T) {
 	m := loadedModel()
 	m.mode = artistsMode
 	m.focused = playlistsPane
-	m.goToArtistPending = true
+	m.goToSidebarGroupPending = true
 
 	content := m.renderStatusBar(100)
-	if !strings.Contains(content, "Letter Go To Artist") {
-		t.Fatalf("expected go-to artist pending hint, got:\n%s", content)
+	if !strings.Contains(content, "Letter Go To") {
+		t.Fatalf("expected go-to sidebar pending hint, got:\n%s", content)
 	}
 }
 

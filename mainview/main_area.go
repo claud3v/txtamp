@@ -39,13 +39,20 @@ func (m Model) renderMainArea(width, height int) string {
 
 func (m Model) renderSongs(width, height int) string {
 	title := "Songs"
-	if len(m.playlists) > 0 {
+	subtitle := fmt.Sprintf("%d songs", len(m.songs))
+	if m.mode == albumsMode && len(m.albums) > 0 {
+		album := m.albums[m.selectedAlbum]
+		title = formatAlbumTitle(album)
+		if album.Artist != "" {
+			subtitle = album.Artist + "  " + subtitle
+		}
+	} else if len(m.playlists) > 0 {
 		title = m.playlists[m.selectedPlaylist].Name
 	}
 
 	lines := []string{
 		paneTitle(title, m.focused == songsPane),
-		ui.Subtitle.Render(fmt.Sprintf("%d songs", len(m.songs))),
+		ui.Subtitle.Render(subtitle),
 		"",
 	}
 	if m.filterQueryFor(songsPane) != "" || m.searching && m.searchPane == songsPane {
@@ -56,7 +63,9 @@ func (m Model) renderSongs(width, height int) string {
 		lines = append(lines, ui.Error.Render(m.err.Error()))
 	} else if m.loading && len(m.songs) == 0 {
 		lines = append(lines, emptyState("Loading..."))
-	} else if len(m.playlists) == 0 {
+	} else if m.mode == albumsMode && len(m.albums) == 0 {
+		lines = append(lines, emptyState("No albums found"))
+	} else if m.mode == playlistsMode && len(m.playlists) == 0 {
 		lines = append(lines, emptyState("No playlists found"))
 	}
 
@@ -199,7 +208,7 @@ func (m Model) renderArtists(width, height int) string {
 
 	lines := []string{
 		paneTitle(title, m.focused == songsPane),
-		ui.Subtitle.Render(fmt.Sprintf("%d albums, %d songs", len(m.albums), len(m.songs))),
+		ui.Subtitle.Render(fmt.Sprintf("%d albums, %d songs", len(m.artistAlbums), len(m.songs))),
 		"",
 	}
 	if m.filterQueryFor(songsPane) != "" || m.searching && m.searchPane == songsPane {
@@ -243,10 +252,10 @@ func (m Model) renderArtists(width, height int) string {
 }
 
 func (m Model) artistRows() []artistRow {
-	rows := make([]artistRow, 0, len(m.albums)+len(m.songs))
+	rows := make([]artistRow, 0, len(m.artistAlbums)+len(m.songs))
 	songIndex := 0
 	query := m.filterQueryFor(songsPane)
-	for albumIndex, group := range m.albums {
+	for albumIndex, group := range m.artistAlbums {
 		albumStart := len(rows)
 		rows = append(rows, artistRow{album: group.album, albumIndex: albumIndex, songIndex: -1})
 		if m.albumCollapsed(albumIndex) && query == "" {
@@ -341,12 +350,12 @@ func (m *Model) expandAllAlbums() {
 }
 
 func (m *Model) collapseAllAlbums() {
-	if m.contentMode != libraryContent || m.mode != artistsMode || len(m.albums) == 0 {
+	if m.contentMode != libraryContent || m.mode != artistsMode || len(m.artistAlbums) == 0 {
 		return
 	}
 
-	m.collapsedAlbums = make(map[int]bool, len(m.albums))
-	for i := range m.albums {
+	m.collapsedAlbums = make(map[int]bool, len(m.artistAlbums))
+	for i := range m.artistAlbums {
 		m.collapsedAlbums[i] = true
 	}
 	m.clampSelectedArtistRow()

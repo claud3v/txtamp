@@ -39,6 +39,7 @@ type sidebarMode int
 
 const (
 	artistsMode sidebarMode = iota
+	albumsMode
 	playlistsMode
 )
 
@@ -73,7 +74,7 @@ type Model struct {
 	searching                  bool
 	searchPane                 focusPane
 	searchQuery                string
-	goToArtistPending          bool
+	goToSidebarGroupPending          bool
 	globalSearching            bool
 	globalSearchQuery          string
 	globalSearchSubmittedQuery string
@@ -84,8 +85,10 @@ type Model struct {
 	selectedQueue              int
 	loadedPlaylistID           string
 	loadedArtistID             string
+	loadedAlbumID              string
 	selectedPlaylist           int
 	selectedArtist             int
+	selectedAlbum              int
 	selectedArtistRow          int
 	selectedSong               int
 	collapsedAlbums            map[int]bool
@@ -104,11 +107,12 @@ type Model struct {
 	sidebarMarqueeOffset       int
 	queueDirty                 bool
 
-	playlists []navidrome.Playlist
-	artists   []navidrome.Artist
-	albums    []albumGroup
-	songs     []navidrome.Song
-	queue     []navidrome.Song
+	playlists    []navidrome.Playlist
+	artists      []navidrome.Artist
+	albums       []navidrome.Album
+	artistAlbums []albumGroup
+	songs        []navidrome.Song
+	queue        []navidrome.Song
 }
 
 type playlistsLoadedMsg struct {
@@ -124,6 +128,17 @@ type songsLoadedMsg struct {
 
 type artistsLoadedMsg struct {
 	artists []navidrome.Artist
+	err     error
+}
+
+type albumsLoadedMsg struct {
+	albums []navidrome.Album
+	err    error
+}
+
+type albumLoadedMsg struct {
+	albumID string
+	songs   []navidrome.Song
 	err     error
 }
 
@@ -237,7 +252,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.loading = false
 		m.err = msg.err
 		m.loadedPlaylistID = msg.playlistID
-		m.albums = nil
+		m.artistAlbums = nil
 		m.songs = msg.songs
 		m.selectedSong = 0
 	case artistsLoadedMsg:
@@ -248,7 +263,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		m.loading = false
 		m.err = msg.err
-		m.albums = nil
+		m.artistAlbums = nil
 		m.songs = nil
 		m.selectedArtist = 0
 		m.selectedArtistRow = 0
@@ -261,6 +276,39 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		cmd := m.loadSelectedArtist()
 		return m, cmd
+	case albumsLoadedMsg:
+		m.albums = msg.albums
+		if m.mode != albumsMode {
+			return m, nil
+		}
+
+		m.loading = false
+		m.err = msg.err
+		m.artistAlbums = nil
+		m.songs = nil
+		m.selectedAlbum = 0
+		m.selectedSong = 0
+
+		if msg.err != nil || len(m.albums) == 0 {
+			return m, nil
+		}
+
+		cmd := m.loadSelectedAlbum()
+		return m, cmd
+	case albumLoadedMsg:
+		if m.mode != albumsMode {
+			return m, nil
+		}
+		if len(m.albums) > 0 && msg.albumID != m.albums[m.selectedAlbum].ID {
+			return m, nil
+		}
+
+		m.loading = false
+		m.err = msg.err
+		m.loadedAlbumID = msg.albumID
+		m.artistAlbums = nil
+		m.songs = msg.songs
+		m.selectedSong = 0
 	case artistLoadedMsg:
 		if m.mode != artistsMode {
 			return m, nil
@@ -272,7 +320,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.loading = false
 		m.err = msg.err
 		m.loadedArtistID = msg.artistID
-		m.albums = msg.albums
+		m.artistAlbums = msg.albums
 		m.songs = msg.songs
 		m.selectedArtistRow = 0
 		m.collapsedAlbums = nil
@@ -388,8 +436,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		if m.goToArtistPending {
-			cmd := m.handleGoToArtistKey(msg)
+		if m.goToSidebarGroupPending {
+			cmd := m.handleGoToSidebarGroupKey(msg)
 			return m, cmd
 		}
 
@@ -447,7 +495,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case actionToggleTheme:
 			m.openThemeDialog()
 		case actionGoToArtist:
-			m.startGoToArtist()
+			m.startGoToSidebarGroup()
 		case actionToggleQueue:
 			m.toggleQueue()
 		case actionAddToQueue:
@@ -517,6 +565,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, withToastClear(cmd, m.toastID)
 		case actionShowArtists:
 			cmd := m.switchMode(artistsMode)
+			return m, cmd
+		case actionShowAlbums:
+			cmd := m.switchMode(albumsMode)
 			return m, cmd
 		case actionShowPlaylists:
 			cmd := m.switchMode(playlistsMode)
@@ -629,7 +680,8 @@ func (m Model) renderModeDialog() string {
 	width := 22
 	rows := []string{
 		modeDialogRow("Artists", "1", m.selectedMode == artistsMode, width),
-		modeDialogRow("Playlists", "2", m.selectedMode == playlistsMode, width),
+		modeDialogRow("Albums", "2", m.selectedMode == albumsMode, width),
+		modeDialogRow("Playlists", "3", m.selectedMode == playlistsMode, width),
 	}
 
 	return ui.Dialog.Render(lipgloss.JoinVertical(lipgloss.Left, rows...))
@@ -772,12 +824,17 @@ func (m *Model) handleModeDialogAction(action action) tea.Cmd {
 	switch action {
 	case actionCloseDialog:
 		m.modeDialogOpen = false
-	case actionMoveUp, actionMoveDown:
-		m.toggleSelectedMode()
+	case actionMoveUp:
+		m.moveSelectedMode(-1)
+	case actionMoveDown:
+		m.moveSelectedMode(1)
 	case actionActivate:
 		return m.applySelectedMode()
 	case actionShowArtists:
 		m.selectedMode = artistsMode
+		return m.applySelectedMode()
+	case actionShowAlbums:
+		m.selectedMode = albumsMode
 		return m.applySelectedMode()
 	case actionShowPlaylists:
 		m.selectedMode = playlistsMode
@@ -787,13 +844,8 @@ func (m *Model) handleModeDialogAction(action action) tea.Cmd {
 	return nil
 }
 
-func (m *Model) toggleSelectedMode() {
-	if m.selectedMode == artistsMode {
-		m.selectedMode = playlistsMode
-		return
-	}
-
-	m.selectedMode = artistsMode
+func (m *Model) moveSelectedMode(delta int) {
+	m.selectedMode = sidebarMode(clamp(int(m.selectedMode)+delta, int(artistsMode), int(playlistsMode)))
 }
 
 func (m *Model) applySelectedMode() tea.Cmd {
@@ -871,6 +923,21 @@ func (m *Model) moveSidebarSelection(delta int) tea.Cmd {
 			m.sidebarMarqueeOffset = 0
 			return tea.Batch(m.loadSelectedArtist(), tickSidebarMarquee())
 		}
+	case albumsMode:
+		albums := m.filteredAlbums()
+		if len(albums) == 0 {
+			return nil
+		}
+
+		previous := m.selectedAlbum
+		position := m.selectedAlbumPosition(albums)
+		position = clamp(position+delta, 0, len(albums)-1)
+		m.selectedAlbum = albums[position].index
+		m.selectedSong = 0
+		if m.selectedAlbum != previous {
+			m.sidebarMarqueeOffset = 0
+			return tea.Batch(m.loadSelectedAlbum(), tickSidebarMarquee())
+		}
 	}
 
 	return nil
@@ -886,7 +953,7 @@ func (m *Model) switchMode(mode sidebarMode) tea.Cmd {
 	m.sidebarMarqueeOffset = 0
 	m.selectedSong = 0
 	m.songs = nil
-	m.albums = nil
+	m.artistAlbums = nil
 	m.selectedArtistRow = 0
 	m.collapsedAlbums = nil
 
@@ -900,6 +967,12 @@ func (m *Model) switchMode(mode sidebarMode) tea.Cmd {
 	case artistsMode:
 		if len(m.artists) == 0 {
 			return tea.Batch(m.loadArtists(), tickSidebarMarquee())
+		}
+
+		return tea.Batch(m.loadSelectedSidebarItem(), tickSidebarMarquee())
+	case albumsMode:
+		if len(m.albums) == 0 {
+			return tea.Batch(m.loadAlbums(), tickSidebarMarquee())
 		}
 
 		return tea.Batch(m.loadSelectedSidebarItem(), tickSidebarMarquee())
@@ -918,6 +991,8 @@ func (m *Model) loadSelectedSidebarItem() tea.Cmd {
 		return m.loadSelectedPlaylist()
 	case artistsMode:
 		return m.loadSelectedArtist()
+	case albumsMode:
+		return m.loadSelectedAlbum()
 	default:
 		return nil
 	}
@@ -929,6 +1004,8 @@ func (m Model) selectedSidebarItemLoaded() bool {
 		return len(m.playlists) > 0 && m.loadedPlaylistID == m.playlists[m.selectedPlaylist].ID
 	case artistsMode:
 		return len(m.artists) > 0 && m.loadedArtistID == m.artists[m.selectedArtist].ID
+	case albumsMode:
+		return len(m.albums) > 0 && m.loadedAlbumID == m.albums[m.selectedAlbum].ID
 	default:
 		return false
 	}
@@ -992,6 +1069,37 @@ func (m *Model) loadArtists() tea.Cmd {
 	}
 }
 
+func (m *Model) loadAlbums() tea.Cmd {
+	m.loading = true
+
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), loadTimeout)
+		defer cancel()
+
+		albums, err := m.client.ListAlbums(ctx)
+		return albumsLoadedMsg{albums: albums, err: err}
+	}
+}
+
+func (m *Model) loadSelectedAlbum() tea.Cmd {
+	if len(m.albums) == 0 {
+		return nil
+	}
+
+	albumID := m.albums[m.selectedAlbum].ID
+	m.loading = true
+	m.artistAlbums = nil
+	m.songs = nil
+
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), loadTimeout)
+		defer cancel()
+
+		songs, err := m.client.GetAlbumSongs(ctx, albumID)
+		return albumLoadedMsg{albumID: albumID, songs: songs, err: err}
+	}
+}
+
 func (m *Model) loadSelectedArtist() tea.Cmd {
 	if len(m.artists) == 0 {
 		return nil
@@ -999,7 +1107,7 @@ func (m *Model) loadSelectedArtist() tea.Cmd {
 
 	artistID := m.artists[m.selectedArtist].ID
 	m.loading = true
-	m.albums = nil
+	m.artistAlbums = nil
 	m.songs = nil
 
 	return func() tea.Msg {
@@ -1132,6 +1240,10 @@ func (m Model) currentLibraryPlaybackSource() string {
 	case artistsMode:
 		if len(m.artists) > 0 {
 			return "Artist: " + m.artists[clamp(m.selectedArtist, 0, len(m.artists)-1)].Name
+		}
+	case albumsMode:
+		if len(m.albums) > 0 {
+			return "Album: " + formatAlbumTitle(m.albums[clamp(m.selectedAlbum, 0, len(m.albums)-1)])
 		}
 	}
 

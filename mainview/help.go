@@ -14,9 +14,9 @@ func (m Model) renderStatusBar(width int) string {
 }
 
 func (m Model) contextualStatusHint() string {
-	if m.mode == artistsMode && m.focused == playlistsPane && m.contentMode == libraryContent {
-		if m.goToArtistPending {
-			return "Letter Go To Artist  Esc Cancel"
+	if (m.mode == artistsMode || m.mode == albumsMode) && m.focused == playlistsPane && m.contentMode == libraryContent {
+		if m.goToSidebarGroupPending {
+			return "Letter Go To  Esc Cancel"
 		}
 		return "Arrows Navigate  Enter Open  g Go"
 	}

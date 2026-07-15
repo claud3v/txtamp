@@ -2,6 +2,7 @@ package mainview
 
 import (
 	"context"
+	"sort"
 	"strings"
 	"txtamp/navidrome"
 
@@ -16,6 +17,11 @@ type indexedPlaylist struct {
 type indexedArtist struct {
 	index  int
 	artist navidrome.Artist
+}
+
+type indexedAlbum struct {
+	index int
+	album navidrome.Album
 }
 
 type indexedSong struct {
@@ -50,16 +56,21 @@ func (m *Model) startSearch() {
 	m.searchPane = m.focused
 }
 
-func (m *Model) startGoToArtist() {
-	if m.mode != artistsMode || m.focused != playlistsPane || len(m.filteredArtists()) == 0 {
+func (m *Model) startGoToSidebarGroup() {
+	if m.focused != playlistsPane {
 		return
 	}
 
-	m.goToArtistPending = true
+	switch m.mode {
+	case artistsMode:
+		m.goToSidebarGroupPending = len(m.filteredArtists()) > 0
+	case albumsMode:
+		m.goToSidebarGroupPending = len(m.filteredAlbums()) > 0
+	}
 }
 
-func (m *Model) handleGoToArtistKey(msg tea.KeyMsg) tea.Cmd {
-	m.goToArtistPending = false
+func (m *Model) handleGoToSidebarGroupKey(msg tea.KeyMsg) tea.Cmd {
+	m.goToSidebarGroupPending = false
 	action, ok := actionForKey(msg.String())
 	if ok && action == actionCloseDialog {
 		return nil
@@ -68,13 +79,24 @@ func (m *Model) handleGoToArtistKey(msg tea.KeyMsg) tea.Cmd {
 		return nil
 	}
 
-	return m.goToArtistLetter([]rune(msg.String())[0])
+	return m.goToSidebarGroupLetter([]rune(msg.String())[0])
 }
 
-func (m *Model) goToArtistLetter(letter rune) tea.Cmd {
-	target := artistGroup(string(letter))
+func (m *Model) goToSidebarGroupLetter(letter rune) tea.Cmd {
+	target := alphaGroup(string(letter))
+	switch m.mode {
+	case artistsMode:
+		return m.goToArtistGroup(target)
+	case albumsMode:
+		return m.goToAlbumGroup(target)
+	default:
+		return nil
+	}
+}
+
+func (m *Model) goToArtistGroup(target string) tea.Cmd {
 	for _, artist := range m.filteredArtists() {
-		if artistGroup(artist.artist.Name) == target {
+		if alphaGroup(artist.artist.Name) == target {
 			if m.selectedArtist == artist.index {
 				return nil
 			}
@@ -85,6 +107,23 @@ func (m *Model) goToArtistLetter(letter rune) tea.Cmd {
 			m.selectedSong = 0
 			m.sidebarMarqueeOffset = 0
 			return tea.Batch(m.loadSelectedArtist(), tickSidebarMarquee())
+		}
+	}
+
+	return nil
+}
+
+func (m *Model) goToAlbumGroup(target string) tea.Cmd {
+	for _, album := range m.filteredAlbums() {
+		if alphaGroup(album.album.Name) == target {
+			if m.selectedAlbum == album.index {
+				return nil
+			}
+
+			m.selectedAlbum = album.index
+			m.selectedSong = 0
+			m.sidebarMarqueeOffset = 0
+			return tea.Batch(m.loadSelectedAlbum(), tickSidebarMarquee())
 		}
 	}
 
@@ -272,6 +311,12 @@ func (m *Model) selectFirstFilteredItem() bool {
 				m.selectedArtist = artists[0].index
 				return true
 			}
+		case albumsMode:
+			albums := m.filteredAlbums()
+			if len(albums) > 0 && m.selectedAlbum != albums[0].index {
+				m.selectedAlbum = albums[0].index
+				return true
+			}
 		}
 	case songsPane:
 		songs := m.filteredSongs()
@@ -317,6 +362,30 @@ func (m Model) filteredArtists() []indexedArtist {
 	return artists
 }
 
+func (m Model) filteredAlbums() []indexedAlbum {
+	query := m.filterQueryFor(playlistsPane)
+	albums := make([]indexedAlbum, 0, len(m.albums))
+	for i, album := range m.albums {
+		if query == "" || albumMatches(album, query) {
+			albums = append(albums, indexedAlbum{index: i, album: album})
+		}
+	}
+
+	sort.SliceStable(albums, func(i, j int) bool {
+		leftGroup := alphaGroup(albums[i].album.Name)
+		rightGroup := alphaGroup(albums[j].album.Name)
+		if leftGroup != rightGroup {
+			return leftGroup < rightGroup
+		}
+
+		leftName := strings.ToLower(formatSidebarAlbum(albums[i].album))
+		rightName := strings.ToLower(formatSidebarAlbum(albums[j].album))
+		return leftName < rightName
+	})
+
+	return albums
+}
+
 func (m Model) filteredSongs() []indexedSong {
 	query := m.filterQueryFor(songsPane)
 	songs := make([]indexedSong, 0, len(m.songs))
@@ -327,6 +396,11 @@ func (m Model) filteredSongs() []indexedSong {
 	}
 
 	return songs
+}
+
+func albumMatches(album navidrome.Album, query string) bool {
+	return containsFold(album.Name, query) ||
+		containsFold(album.Artist, query)
 }
 
 func songMatches(song navidrome.Song, query string) bool {
@@ -351,6 +425,8 @@ func (m Model) selectedSidebarPosition() int {
 	switch m.mode {
 	case artistsMode:
 		return m.selectedArtistPosition(m.filteredArtists())
+	case albumsMode:
+		return m.selectedAlbumPosition(m.filteredAlbums())
 	default:
 		return m.selectedPlaylistPosition(m.filteredPlaylists())
 	}
@@ -369,6 +445,16 @@ func (m Model) selectedPlaylistPosition(playlists []indexedPlaylist) int {
 func (m Model) selectedArtistPosition(artists []indexedArtist) int {
 	for i, artist := range artists {
 		if artist.index == m.selectedArtist {
+			return i
+		}
+	}
+
+	return 0
+}
+
+func (m Model) selectedAlbumPosition(albums []indexedAlbum) int {
+	for i, album := range albums {
+		if album.index == m.selectedAlbum {
 			return i
 		}
 	}
