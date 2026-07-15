@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand"
 	"strings"
 	"time"
 	"txtamp/config"
@@ -51,6 +52,14 @@ const (
 	queueContent
 )
 
+type repeatMode int
+
+const (
+	repeatOff repeatMode = iota
+	repeatOne
+	repeatAll
+)
+
 type albumGroup struct {
 	album navidrome.Album
 	songs []navidrome.Song
@@ -74,7 +83,7 @@ type Model struct {
 	searching                  bool
 	searchPane                 focusPane
 	searchQuery                string
-	goToSidebarGroupPending          bool
+	goToSidebarGroupPending    bool
 	globalSearching            bool
 	globalSearchQuery          string
 	globalSearchSubmittedQuery string
@@ -99,6 +108,8 @@ type Model struct {
 	currentSongIndex           int
 	playbackSongs              []navidrome.Song
 	playbackSource             string
+	repeatMode                 repeatMode
+	shuffle                    bool
 	playbackID                 int
 	loading                    bool
 	err                        error
@@ -551,6 +562,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case actionPreviousSong:
 			cmd := m.playPreviousSong()
 			return m, cmd
+		case actionToggleRepeat:
+			m.toggleRepeat()
+			return m, clearToast(m.toastID)
+		case actionToggleShuffle:
+			m.toggleShuffle()
+			return m, clearToast(m.toastID)
 		case actionSeekBackward:
 			cmd := m.seekRelative(-seekStep)
 			return m, withToastClear(cmd, m.toastID)
@@ -1196,8 +1213,8 @@ func (m *Model) playNextSong() tea.Cmd {
 		return nil
 	}
 
-	nextIndex := m.currentSongIndex + 1
-	if nextIndex >= len(playbackSongs) {
+	nextIndex, ok := m.nextPlaybackIndex(playbackSongs)
+	if !ok {
 		m.currentSong = nil
 		m.elapsed = 0
 		m.duration = 0
@@ -1208,6 +1225,28 @@ func (m *Model) playNextSong() tea.Cmd {
 
 	m.syncVisibleSelectionToPlaybackSong(playbackSongs[nextIndex], nextIndex)
 	return m.playSongFromList(playbackSongs[nextIndex], nextIndex, playbackSongs, m.playbackSource)
+}
+
+func (m Model) nextPlaybackIndex(playbackSongs []navidrome.Song) (int, bool) {
+	if len(playbackSongs) == 0 || m.currentSongIndex < 0 {
+		return 0, false
+	}
+	if m.repeatMode == repeatOne {
+		return clamp(m.currentSongIndex, 0, len(playbackSongs)-1), true
+	}
+	if m.shuffle && len(playbackSongs) > 1 {
+		return randomDifferentIndex(len(playbackSongs), m.currentSongIndex), true
+	}
+
+	nextIndex := m.currentSongIndex + 1
+	if nextIndex < len(playbackSongs) {
+		return nextIndex, true
+	}
+	if m.repeatMode == repeatAll {
+		return 0, true
+	}
+
+	return 0, false
 }
 
 func (m *Model) playPreviousSong() tea.Cmd {
@@ -1223,12 +1262,35 @@ func (m *Model) playPreviousSong() tea.Cmd {
 	}
 
 	if m.elapsed > restartLimit || m.currentSongIndex == 0 {
+		if m.elapsed <= restartLimit && m.currentSongIndex == 0 && m.repeatMode == repeatAll && len(playbackSongs) > 1 {
+			previousIndex := len(playbackSongs) - 1
+			m.syncVisibleSelectionToPlaybackSong(playbackSongs[previousIndex], previousIndex)
+			return m.playSongFromList(playbackSongs[previousIndex], previousIndex, playbackSongs, m.playbackSource)
+		}
 		return m.seekStart()
 	}
 
-	previousIndex := m.currentSongIndex - 1
+	previousIndex := m.previousPlaybackIndex(playbackSongs)
 	m.syncVisibleSelectionToPlaybackSong(playbackSongs[previousIndex], previousIndex)
 	return m.playSongFromList(playbackSongs[previousIndex], previousIndex, playbackSongs, m.playbackSource)
+}
+
+func (m Model) previousPlaybackIndex(playbackSongs []navidrome.Song) int {
+	if m.shuffle && len(playbackSongs) > 1 {
+		return randomDifferentIndex(len(playbackSongs), m.currentSongIndex)
+	}
+
+	return clamp(m.currentSongIndex-1, 0, len(playbackSongs)-1)
+}
+
+func randomDifferentIndex(length, current int) int {
+	current = clamp(current, 0, length-1)
+	next := rand.Intn(length - 1)
+	if next >= current {
+		next++
+	}
+
+	return next
 }
 
 func (m Model) currentLibraryPlaybackSource() string {
@@ -1324,6 +1386,32 @@ func (m *Model) adjustVolume(delta int) tea.Cmd {
 
 	return func() tea.Msg {
 		return volumeMsg{err: player.AdjustVolume(delta)}
+	}
+}
+
+func (m *Model) toggleRepeat() {
+	m.repeatMode = repeatMode((int(m.repeatMode) + 1) % 3)
+	m.showToast("Repeat " + m.repeatModeLabel())
+}
+
+func (m *Model) toggleShuffle() {
+	m.shuffle = !m.shuffle
+	if m.shuffle {
+		m.showToast("Shuffle On")
+		return
+	}
+
+	m.showToast("Shuffle Off")
+}
+
+func (m Model) repeatModeLabel() string {
+	switch m.repeatMode {
+	case repeatOne:
+		return "One"
+	case repeatAll:
+		return "All"
+	default:
+		return "Off"
 	}
 }
 

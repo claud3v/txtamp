@@ -38,7 +38,7 @@ func (m Model) renderPlayer(width int) string {
 	metadataLine := ui.PlayerMeta.Render(joinLeftRight(metadata, m.visiblePlaybackSource(), innerWidth))
 	progressLine := progressBar(m.elapsed, m.currentDuration(), barWidth)
 	upNextTitle := ui.Truncate(m.upNextText(), max(innerWidth-9, 8))
-	upNextLine := ui.PlayerUpNextLabel.Render("Up next: ") + ui.PlayerUpNextTitle.Render(upNextTitle)
+	upNextLine := joinLeftRight(ui.PlayerUpNextLabel.Render("Up next: ")+ui.PlayerUpNextTitle.Render(upNextTitle), ui.PlayerMeta.Render(m.playbackOptionsText()), innerWidth)
 
 	return ui.PlayerBar.
 		Width(width - 2).
@@ -62,12 +62,24 @@ func (m Model) upNextText() string {
 	}
 
 	playbackSongs := m.activePlaybackSongs()
-	nextIndex := m.currentSongIndex + 1
-	if m.currentSong != nil && m.currentSongIndex >= 0 && nextIndex < len(playbackSongs) {
+	nextIndex, ok := m.nextPlaybackIndex(playbackSongs)
+	if m.currentSong != nil && ok {
 		return formatSongTitle(playbackSongs[nextIndex])
 	}
 
 	return "-"
+}
+
+func (m Model) playbackOptionsText() string {
+	parts := []string{}
+	if m.shuffle {
+		parts = append(parts, "Shuffle")
+	}
+	if m.repeatMode != repeatOff {
+		parts = append(parts, "Repeat "+m.repeatModeLabel())
+	}
+
+	return strings.Join(parts, "  ")
 }
 
 func (m Model) visiblePlaybackSource() string {

@@ -13,6 +13,8 @@ const (
 	actionStopPlayback   action = "stop_playback"
 	actionNextSong       action = "next_song"
 	actionPreviousSong   action = "previous_song"
+	actionToggleRepeat   action = "toggle_repeat"
+	actionToggleShuffle  action = "toggle_shuffle"
 	actionSeekBackward   action = "seek_backward"
 	actionSeekForward    action = "seek_forward"
 	actionVolumeUp       action = "volume_up"
@@ -75,6 +77,8 @@ var defaultKeyBindings = []keyBinding{
 	{Key: "]", Action: actionNextSong, Description: "Next song"},
 	{Key: "p", Action: actionPreviousSong, Description: "Previous or restart song"},
 	{Key: "[", Action: actionPreviousSong, Description: "Previous or restart song"},
+	{Key: "r", Action: actionToggleRepeat, Description: "Cycle repeat mode"},
+	{Key: "z", Action: actionToggleShuffle, Description: "Toggle shuffle"},
 	{Key: ",", Action: actionSeekBackward, Description: "Seek backward 10 seconds"},
 	{Key: ".", Action: actionSeekForward, Description: "Seek forward 10 seconds"},
 	{Key: "+", Action: actionVolumeUp, Description: "Volume up"},

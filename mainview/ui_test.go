@@ -271,6 +271,106 @@ func TestNextAliasPlaysNextSong(t *testing.T) {
 	}
 }
 
+func TestRepeatKeyCyclesRepeatMode(t *testing.T) {
+	m := loadedModel()
+
+	updated, cmd := m.Update(tea.KeyPressMsg{Code: 'r', Text: "r"})
+	m = updated.(Model)
+	if cmd == nil {
+		t.Fatal("expected toast clear command")
+	}
+	if m.repeatMode != repeatOne {
+		t.Fatalf("expected repeat one, got %v", m.repeatMode)
+	}
+	if !strings.Contains(m.toast, "Repeat One") {
+		t.Fatalf("expected repeat toast, got %q", m.toast)
+	}
+
+	updated, _ = m.Update(tea.KeyPressMsg{Code: 'r', Text: "r"})
+	m = updated.(Model)
+	if m.repeatMode != repeatAll {
+		t.Fatalf("expected repeat all, got %v", m.repeatMode)
+	}
+
+	updated, _ = m.Update(tea.KeyPressMsg{Code: 'r', Text: "r"})
+	m = updated.(Model)
+	if m.repeatMode != repeatOff {
+		t.Fatalf("expected repeat off, got %v", m.repeatMode)
+	}
+}
+
+func TestShuffleKeyTogglesShuffle(t *testing.T) {
+	m := loadedModel()
+
+	updated, cmd := m.Update(tea.KeyPressMsg{Code: 'z', Text: "z"})
+	m = updated.(Model)
+	if cmd == nil {
+		t.Fatal("expected toast clear command")
+	}
+	if !m.shuffle {
+		t.Fatal("expected shuffle enabled")
+	}
+	if !strings.Contains(m.toast, "Shuffle On") {
+		t.Fatalf("expected shuffle toast, got %q", m.toast)
+	}
+
+	updated, _ = m.Update(tea.KeyPressMsg{Code: 'z', Text: "z"})
+	m = updated.(Model)
+	if m.shuffle {
+		t.Fatal("expected shuffle disabled")
+	}
+}
+
+func TestRepeatAllWrapsNextSong(t *testing.T) {
+	m := loadedModel()
+	m.currentSong = &m.songs[2]
+	m.currentSongIndex = 2
+	m.selectedSong = 2
+	m.repeatMode = repeatAll
+
+	updated, cmd := m.Update(tea.KeyPressMsg{Code: 'n', Text: "n"})
+	m = updated.(Model)
+
+	if cmd == nil {
+		t.Fatal("expected wrapped play command")
+	}
+	if m.selectedSong != 0 {
+		t.Fatalf("expected first song selected, got %d", m.selectedSong)
+	}
+}
+
+func TestRepeatOneReplaysCurrentSong(t *testing.T) {
+	m := loadedModel()
+	m.currentSong = &m.songs[1]
+	m.currentSongIndex = 1
+	m.selectedSong = 1
+	m.repeatMode = repeatOne
+
+	updated, cmd := m.Update(tea.KeyPressMsg{Code: 'n', Text: "n"})
+	m = updated.(Model)
+
+	if cmd == nil {
+		t.Fatal("expected repeat play command")
+	}
+	if m.selectedSong != 1 {
+		t.Fatalf("expected current song to stay selected, got %d", m.selectedSong)
+	}
+}
+
+func TestShuffleNextPicksDifferentSong(t *testing.T) {
+	m := loadedModel()
+	m.currentSongIndex = 0
+	m.shuffle = true
+
+	next, ok := m.nextPlaybackIndex(m.songs)
+	if !ok {
+		t.Fatal("expected shuffle next index")
+	}
+	if next == 0 {
+		t.Fatalf("expected a different song, got %d", next)
+	}
+}
+
 func TestPreviousKeyRestartsCurrentSong(t *testing.T) {
 	m := loadedModel()
 	m.currentSong = &m.songs[1]

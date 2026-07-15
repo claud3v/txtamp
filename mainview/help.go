@@ -7,7 +7,7 @@ import (
 )
 
 func (m Model) renderStatusBar(width int) string {
-	text := fmt.Sprintf("Queue %d  %s  Space Play/Pause  q Queue  t Theme  ? Help", len(m.queue), m.contextualStatusHint())
+	text := fmt.Sprintf("Queue %d  %s  Space Play/Pause  r Repeat  z Shuffle  ? Help  q Queue  t Theme", len(m.queue), m.contextualStatusHint())
 	return ui.StatusBar.
 		Width(width).
 		Render(ui.Truncate(text, max(width-4, 1)))

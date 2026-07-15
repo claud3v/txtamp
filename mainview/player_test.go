@@ -117,6 +117,31 @@ func TestRenderPlayerShowsEmptyUpNext(t *testing.T) {
 	}
 }
 
+func TestRenderPlayerShowsRepeatAndShuffleOptions(t *testing.T) {
+	m := loadedModel()
+	m.currentSong = &m.songs[0]
+	m.currentSongIndex = 0
+	m.shuffle = true
+	m.repeatMode = repeatAll
+
+	content := m.renderPlayer(100)
+	if !strings.Contains(content, "Shuffle") || !strings.Contains(content, "Repeat All") {
+		t.Fatalf("expected playback options, got:\n%s", content)
+	}
+}
+
+func TestRenderPlayerRepeatAllWrapsUpNext(t *testing.T) {
+	m := loadedModel()
+	m.currentSong = &m.songs[2]
+	m.currentSongIndex = 2
+	m.repeatMode = repeatAll
+
+	content := m.renderPlayer(100)
+	if !strings.Contains(content, "Up next: Dream On") {
+		t.Fatalf("expected repeat all up next to wrap, got:\n%s", content)
+	}
+}
+
 func TestProgressBar(t *testing.T) {
 	got := progressBar(30, 120, 10)
 	if !strings.Contains(got, "━") {
